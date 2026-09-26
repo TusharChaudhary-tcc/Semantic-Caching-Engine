@@ -2,7 +2,7 @@
 
 > **Stop re-generating the same answers. Start caching with deep intent.**
 >
-> Built by **Vadanta Kumar Chauhaan** , **Tushar Chaudhary** , **Vansh Gupta** , **Uttam Upadhyay**
+> Built by **Vadanta Kumar Chauhaan** 
 
 > **Confidential project.** The contents of this repository are for authorized use only.
 
