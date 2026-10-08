@@ -125,7 +125,7 @@ function App() {
       <header className="header">
         <div className="brand">
           <div className="brand-icon">
-            <span>🧠</span>
+            <span>SC</span>
           </div>
 
           <div>
@@ -141,7 +141,7 @@ function App() {
           </div>
 
           <button className="header-button" title="Settings">
-            ⚙
+              Settings
           </button>
         </div>
       </header>
@@ -173,7 +173,7 @@ function App() {
                 }`}
                 onClick={() => handleOldChat(chat)}
               >
-                <span className="chat-icon">◌</span>
+                <span className="chat-icon">↗</span>
 
                 <span className="chat-title">{chat}</span>
               </button>
@@ -183,7 +183,7 @@ function App() {
           <div className="sidebar-bottom">
             <div className="engine-card">
               <div className="engine-card-top">
-                <span className="mini-brain">✦</span>
+                <span className="mini-brain">SC</span>
 
                 <span className="online-label">ONLINE</span>
               </div>
@@ -216,6 +216,12 @@ function App() {
                 best response.
               </p>
             </div>
+
+            <div className="query-controls">
+              <span className="control-chip">Model <strong>default</strong></span>
+              <span className="control-chip">Threshold <strong>0.82</strong></span>
+              <span className="control-chip">Region <strong>local</strong></span>
+            </div>
           </div>
 
           {/* CHAT CONTENT */}
@@ -224,7 +230,7 @@ function App() {
             {messages.length === 0 ? (
               <div className="welcome">
                 <div className="welcome-icon">
-                  <div className="brain-glow">🧠</div>
+                  <div className="brain-glow">SC</div>
                 </div>
 
                 <h2>Start a conversation</h2>
@@ -241,7 +247,7 @@ function App() {
                       )
                     }
                   >
-                    <span>⚡</span>
+                    <span>01</span>
                     What is semantic caching?
                   </button>
 
@@ -252,7 +258,7 @@ function App() {
                       )
                     }
                   >
-                    <span>◈</span>
+                    <span>02</span>
                     How does an LLM cache work?
                   </button>
 
@@ -263,7 +269,7 @@ function App() {
                       )
                     }
                   >
-                    <span>✦</span>
+                    <span>03</span>
                     Why are embeddings useful?
                   </button>
                 </div>
@@ -276,7 +282,7 @@ function App() {
                     className={`message-row ${item.type}`}
                   >
                     <div className="message-avatar">
-                      {item.type === "user" ? "You" : "🧠"}
+                      {item.type === "user" ? "You" : "SC"}
                     </div>
 
                     <div className="message-content">
@@ -313,7 +319,7 @@ function App() {
 
                 {loading && (
                   <div className="message-row assistant">
-                    <div className="message-avatar">🧠</div>
+                    <div className="message-avatar">SC</div>
 
                     <div className="message-content">
                       <div className="message-label">
@@ -363,7 +369,7 @@ function App() {
               <span>Semantic Cache v0.1</span>
 
               <span>
-                Enter to send&nbsp; • &nbsp;Shift + Enter for new line
+                Enter to send&nbsp; / &nbsp;Shift + Enter for new line
               </span>
             </div>
           </div>
@@ -405,7 +411,7 @@ function App() {
             <div className="metric-header">
               <span>Time Taken</span>
 
-              <span>◷</span>
+              <span className="metric-symbol">ms</span>
             </div>
 
             <div className="metric-value">
@@ -426,7 +432,7 @@ function App() {
             <div className="metric-header">
               <span>Hit / Miss Ratio</span>
 
-              <span>◈</span>
+              <span className="metric-symbol">%</span>
             </div>
 
             <div className="ratio-value">
@@ -510,7 +516,7 @@ function App() {
 
         <aside className="info-panel">
           <div className="info-card interaction-card">
-            <div className="info-card-icon purple">↯</div>
+            <div className="info-card-icon purple">01</div>
 
             <span className="info-label">INTERACTION</span>
 
@@ -523,7 +529,7 @@ function App() {
           </div>
 
           <div className="info-card">
-            <div className="info-card-icon blue">ⓘ</div>
+            <div className="info-card-icon blue">02</div>
 
             <span className="info-label">HOW IT WORKS</span>
 
@@ -556,7 +562,7 @@ function App() {
             <div className="performance-top">
               <span>PERFORMANCE</span>
 
-              <span>↗</span>
+              <span>LIVE</span>
             </div>
 
             <strong>
