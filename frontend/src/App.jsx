@@ -28,6 +28,8 @@ const mockResponses = [
 
 function App() {
   const [showRecentChats, setShowRecentChats] = useState(true);
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [newChatRotated, setNewChatRotated] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [chats, setChats] = useState(initialChats);
@@ -97,12 +99,27 @@ function App() {
     setMessage(chat);
   };
 
+  const toggleChats = () => {
+    setShowRecentChats((visible) => !visible);
+    setShowMetrics(false);
+  };
+
+  const toggleMetrics = () => {
+    setShowMetrics((visible) => !visible);
+    setShowRecentChats(false);
+  };
+
+  const startNewChat = () => {
+    handleNewChat();
+    setNewChatRotated((rotated) => !rotated);
+  };
+
   return (
     <div className="app">
       <header className="header">
         <div className="brand">
           <div className="brand-icon">SC</div>
-          <div>
+          <div className="brand-copy">
             <h1>Semantic Caching Engine</h1>
             <p>Deep intent. Smarter caching.</p>
           </div>
@@ -111,11 +128,25 @@ function App() {
         <div className="header-right">
           <button
             className="header-button recent-chats-toggle"
-            onClick={() => setShowRecentChats((visible) => !visible)}
+            onClick={toggleChats}
             aria-expanded={showRecentChats}
             aria-controls="recent-chats-sidebar"
           >
-            {showRecentChats ? "Hide chats" : "Recent chats"}
+            <span className="wide-label">
+              {showRecentChats ? "Hide chats" : "Recent chats"}
+            </span>
+            <span className="compact-label">
+              {showRecentChats ? "Hide chats" : "Chats"}
+            </span>
+          </button>
+
+          <button
+            className="header-button metrics-toggle"
+            onClick={toggleMetrics}
+            aria-expanded={showMetrics}
+            aria-controls="system-metrics-panel"
+          >
+            {showMetrics ? "Hide metrics" : "Metrics"}
           </button>
 
           <div className="engine-status">
@@ -123,7 +154,7 @@ function App() {
             <span>Engine Online</span>
           </div>
 
-          <button className="header-button" title="Settings">
+          <button className="header-button settings-button" title="Settings">
             Settings
           </button>
         </div>
@@ -138,8 +169,8 @@ function App() {
           <div className="sidebar-heading">
             <span>Recent Chats</span>
             <button
-              className="new-chat-button"
-              onClick={handleNewChat}
+              className={`new-chat-button ${newChatRotated ? "rotated" : ""}`}
+              onClick={startNewChat}
               title="New chat"
               aria-label="New chat"
             >
@@ -296,7 +327,12 @@ function App() {
           </div>
         </section>
 
-        <aside className="metrics-panel">
+        <aside
+          className={`metrics-panel ${
+            showMetrics ? "metrics-open" : "metrics-closed"
+          }`}
+          id="system-metrics-panel"
+        >
           <div className="panel-title">
             <div>
               <h2>System Metrics</h2>
