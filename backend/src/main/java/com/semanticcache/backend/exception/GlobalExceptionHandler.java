@@ -134,6 +134,48 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles empty or invalid response vectors from the embedding model.
+     * Returns HTTP 502 with a safe, intentional client-facing message.
+     */
+    @ExceptionHandler(EmbeddingEmptyResponseException.class)
+    public ResponseEntity<ErrorResponse> handleEmbeddingEmptyResponseException(
+            EmbeddingEmptyResponseException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Empty or invalid embedding response on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "The AI embedding service returned an empty or invalid response. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
+     * Handles embedding generation failures and upstream errors.
+     * Sanitizes errors: returns a generic client message; keeps details strictly in server logs.
+     */
+    @ExceptionHandler(EmbeddingException.class)
+    public ResponseEntity<ErrorResponse> handleEmbeddingException(
+            EmbeddingException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Embedding generation error on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "Failed to generate text embedding from the AI service. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
      * Catch-all fallback handler for unexpected runtime exceptions.
      * Prevents internal implementation details or stack traces from leaking to clients.
      */
