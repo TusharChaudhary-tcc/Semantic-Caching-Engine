@@ -20,6 +20,10 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Catches Bean Validation errors (@Valid on request bodies).
+     * Maps each invalid field to its declared message.
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(
             MethodArgumentNotValidException ex,
@@ -41,12 +45,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    /**
+     * Catches unparseable / malformed JSON payloads.
+     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadableException(
             HttpMessageNotReadableException ex,
             HttpServletRequest request
     ) {
-        log.warn("Malformed JSON request received on {}: {}", request.getRequestURI(), ex.getMessage());
+        // log.warn("Malformed JSON request received on {}: {}", request.getRequestURI(), ex.getMessage());
+        log.warn(
+                "Malformed JSON request received on {}: exception class [{}]",
+                request.getRequestURI(),
+                ex.getClass().getName()
+        );
 
         ErrorResponse response = ErrorResponse.of(
                 HttpStatus.BAD_REQUEST.value(),
@@ -58,12 +70,85 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    /**
+     * Handles missing Gemini API credentials (e.g. GOOGLE_API_KEY environment variable not set).
+     * Returns HTTP 503 with a safe client-facing message without exposing internal paths or configs.
+     */
+    @ExceptionHandler(GeminiMissingCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleMissingCredentialsException(
+            GeminiMissingCredentialsException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Missing Gemini API credentials on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
+                "The AI service is temporarily unavailable due to missing credentials. Please configure the server API key.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
+    /**
+     * Handles empty responses from the Gemini API.
+     * Returns HTTP 502 with a safe, intentional client-facing message.
+     */
+    @ExceptionHandler(GeminiEmptyResponseException.class)
+    public ResponseEntity<ErrorResponse> handleEmptyResponseException(
+            GeminiEmptyResponseException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Empty response received from Gemini API on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "The AI service returned an empty response. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
+     * Handles Gemini API failures and upstream error responses.
+     * Sanitizes errors: returns a generic client message; keeps technical details strictly in server logs without raw payloads.
+     */
+    @ExceptionHandler(GeminiApiException.class)
+    public ResponseEntity<ErrorResponse> handleGeminiApiException(
+            GeminiApiException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Gemini API error processing request on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "The AI service failed to generate a response. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
+     * Catch-all fallback handler for unexpected runtime exceptions.
+     * Prevents internal implementation details or stack traces from leaking to clients.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex,
             HttpServletRequest request
     ) {
-        log.error("Unhandled exception processing request on {}: ", request.getRequestURI(), ex);
+        // log.error("Unhandled exception processing request on {}: ", request.getRequestURI(), ex);
+
+        log.error(
+                "Unhandled exception processing request on {}: exception class [{}]",
+                request.getRequestURI(),
+                ex.getClass().getName()
+        );
 
         ErrorResponse response = ErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),

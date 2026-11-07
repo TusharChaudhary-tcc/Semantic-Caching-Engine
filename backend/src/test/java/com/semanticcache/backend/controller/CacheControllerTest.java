@@ -2,6 +2,7 @@ package com.semanticcache.backend.controller;
 
 import com.semanticcache.backend.dto.CacheRequest;
 import com.semanticcache.backend.dto.CacheResponse;
+import com.semanticcache.backend.service.CacheService;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -16,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class CacheControllerTest {
 
@@ -29,19 +33,21 @@ class CacheControllerTest {
     }
 
     @Test
-    @DisplayName("Valid prompt produces expected CacheResponse")
+    @DisplayName("Valid prompt delegates to CacheService and returns CacheResponse")
     void handleCacheRequestWithValidPrompt() {
-        CacheController controller = new CacheController();
+        CacheService mockCacheService = mock(CacheService.class);
+        CacheController controller = new CacheController(mockCacheService);
         CacheRequest request = new CacheRequest("What is semantic caching?");
+
+        when(mockCacheService.processPrompt(request))
+                .thenReturn(new CacheResponse("Semantic caching uses embeddings to find similar queries.", false));
 
         CacheResponse response = controller.handleCacheRequest(request);
 
         assertNotNull(response);
-        assertEquals(
-                "This is a temporary mocked backend response for your prompt: 'What is semantic caching?'",
-                response.answer()
-        );
+        assertEquals("Semantic caching uses embeddings to find similar queries.", response.answer());
         assertFalse(response.cacheHit());
+        verify(mockCacheService).processPrompt(request);
     }
 
     @Test
