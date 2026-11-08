@@ -176,6 +176,69 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles Qdrant initialization failures (e.g. collection creation or connection unavailable on startup).
+     * Returns HTTP 503 Service Unavailable with a safe client-facing message.
+     */
+    @ExceptionHandler(QdrantInitializationException.class)
+    public ResponseEntity<ErrorResponse> handleQdrantInitializationException(
+            QdrantInitializationException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Qdrant initialization error on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
+                "Vector database service is temporarily unavailable. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
+    /**
+     * Handles Qdrant vector database runtime operation failures (upsert, search, retrieve).
+     * Returns HTTP 502 Bad Gateway with a safe client-facing message.
+     */
+    @ExceptionHandler(QdrantOperationException.class)
+    public ResponseEntity<ErrorResponse> handleQdrantOperationException(
+            QdrantOperationException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Qdrant operation error on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "Failed to process vector database operation. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
+     * Fallback handler for general Qdrant exceptions.
+     * Returns HTTP 502 Bad Gateway with a safe client-facing message.
+     */
+    @ExceptionHandler(QdrantException.class)
+    public ResponseEntity<ErrorResponse> handleQdrantException(
+            QdrantException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Qdrant generic error on {}: exception class [{}]", request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.BAD_GATEWAY.value(),
+                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
+                "Vector database encountered an error. Please try again later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
+
+    /**
      * Catch-all fallback handler for unexpected runtime exceptions.
      * Prevents internal implementation details or stack traces from leaking to clients.
      */

@@ -54,4 +54,49 @@ class GlobalExceptionHandlerTest {
         assertEquals("Failed to generate text embedding from the AI service. Please try again later.", response.getBody().message());
         assertEquals("/api/test", response.getBody().path());
     }
+
+    @Test
+    @DisplayName("Handles QdrantInitializationException returning 503 Service Unavailable and sanitized message")
+    void handlesQdrantInitializationException() {
+        QdrantInitializationException ex = new QdrantInitializationException("Collection init failed: gRPC connection refused to localhost:6334");
+
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleQdrantInitializationException(ex, request);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(503, response.getBody().status());
+        assertEquals("Service Unavailable", response.getBody().error());
+        assertEquals("Vector database service is temporarily unavailable. Please try again later.", response.getBody().message());
+        assertEquals("/api/test", response.getBody().path());
+    }
+
+    @Test
+    @DisplayName("Handles QdrantOperationException returning 502 Bad Gateway and sanitized message")
+    void handlesQdrantOperationException() {
+        QdrantOperationException ex = new QdrantOperationException("Point upsert timeout on collection semantic_cache");
+
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleQdrantOperationException(ex, request);
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(502, response.getBody().status());
+        assertEquals("Bad Gateway", response.getBody().error());
+        assertEquals("Failed to process vector database operation. Please try again later.", response.getBody().message());
+        assertEquals("/api/test", response.getBody().path());
+    }
+
+    @Test
+    @DisplayName("Handles generic QdrantException returning 502 Bad Gateway and sanitized message")
+    void handlesGenericQdrantException() {
+        QdrantException ex = new QdrantException("Unexpected vector DB error with internal details");
+
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleQdrantException(ex, request);
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(502, response.getBody().status());
+        assertEquals("Bad Gateway", response.getBody().error());
+        assertEquals("Vector database encountered an error. Please try again later.", response.getBody().message());
+        assertEquals("/api/test", response.getBody().path());
+    }
 }
