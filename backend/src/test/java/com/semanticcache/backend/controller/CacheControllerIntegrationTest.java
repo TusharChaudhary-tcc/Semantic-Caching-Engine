@@ -1,9 +1,14 @@
 package com.semanticcache.backend.controller;
 
+import com.semanticcache.backend.dto.CacheLookupResult;
+import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.exception.GeminiApiException;
 import com.semanticcache.backend.exception.GeminiEmptyResponseException;
 import com.semanticcache.backend.exception.GeminiMissingCredentialsException;
+import com.semanticcache.backend.service.CacheDecisionService;
+import com.semanticcache.backend.service.CacheRetrievalService;
 import com.semanticcache.backend.service.GeminiProvider;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +18,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Optional;
+
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,7 +38,21 @@ class CacheControllerIntegrationTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private CacheRetrievalService cacheRetrievalService;
+
+    @MockitoBean
+    private CacheDecisionService cacheDecisionService;
+
+    @MockitoBean
     private GeminiProvider geminiProvider;
+
+    @BeforeEach
+    void setUpMocks() {
+        when(cacheRetrievalService.findBestCandidate(anyString(), any(SearchFilter.class)))
+                .thenReturn(Optional.empty());
+        when(cacheDecisionService.evaluate(any(), any(SearchFilter.class)))
+                .thenReturn(CacheLookupResult.missNoCandidate());
+    }
 
     @Test
     @DisplayName("POST /api/cache with valid prompt returns 200 OK and Gemini answer with cacheHit=false")

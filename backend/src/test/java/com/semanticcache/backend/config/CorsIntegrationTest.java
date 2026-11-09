@@ -1,5 +1,9 @@
 package com.semanticcache.backend.config;
 
+import com.semanticcache.backend.dto.CacheLookupResult;
+import com.semanticcache.backend.dto.SearchFilter;
+import com.semanticcache.backend.service.CacheDecisionService;
+import com.semanticcache.backend.service.CacheRetrievalService;
 import com.semanticcache.backend.service.GeminiProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,8 +16,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Optional;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -32,10 +39,20 @@ class CorsIntegrationTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private CacheRetrievalService cacheRetrievalService;
+
+    @MockitoBean
+    private CacheDecisionService cacheDecisionService;
+
+    @MockitoBean
     private GeminiProvider geminiProvider;
 
     @BeforeEach
     void setUp() {
+        when(cacheRetrievalService.findBestCandidate(anyString(), any(SearchFilter.class)))
+                .thenReturn(Optional.empty());
+        when(cacheDecisionService.evaluate(any(), any(SearchFilter.class)))
+                .thenReturn(CacheLookupResult.missNoCandidate());
         when(geminiProvider.generateAnswer(any())).thenReturn("Mock answer for CORS test");
     }
 
