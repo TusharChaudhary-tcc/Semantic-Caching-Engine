@@ -32,6 +32,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -217,11 +220,11 @@ class QdrantVectorRepositoryTest {
         }
 
         @Test
-        @DisplayName("Thread interruption restores interrupted status and throws QdrantOperationException")
+        @DisplayName("Thread interruption restores interrupted status, cancels future, and throws QdrantOperationException")
         void handlesThreadInterruption() throws Exception {
             @SuppressWarnings("unchecked")
             ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
-            when(mockFuture.get()).thenThrow(new InterruptedException("Interrupted"));
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Interrupted"));
             when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
 
             Thread.interrupted();
@@ -232,11 +235,50 @@ class QdrantVectorRepositoryTest {
                         () -> repository.upsert(sampleRecord)
                 );
 
+                verify(mockFuture).cancel(true);
                 assertTrue(Thread.currentThread().isInterrupted(), "Interrupted status must be restored");
                 assertEquals("Failed to upsert vector record due to thread interruption", ex.getMessage());
             } finally {
                 Thread.interrupted();
             }
+        }
+
+        @Test
+        @DisplayName("Timeout during upsert cancels future and throws QdrantOperationException")
+        void handlesUpsertTimeout() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Upsert timed out"));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.upsert(sampleRecord)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to upsert vector record in Qdrant due to operation timeout", ex.getMessage());
+            assertNotNull(ex.getCause());
+            assertTrue(ex.getCause() instanceof TimeoutException);
+        }
+
+        @Test
+        @DisplayName("Cancellation failure during upsert timeout does not swallow TimeoutException")
+        void handlesUpsertTimeoutCancellationFailure() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Upsert timed out"));
+            when(mockFuture.cancel(true)).thenThrow(new RuntimeException("Cancellation failed"));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.upsert(sampleRecord)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to upsert vector record in Qdrant due to operation timeout", ex.getMessage());
+            assertTrue(ex.getCause() instanceof TimeoutException);
         }
     }
 
@@ -298,11 +340,11 @@ class QdrantVectorRepositoryTest {
         }
 
         @Test
-        @DisplayName("Thread interruption during retrieval restores interrupted status and throws QdrantOperationException")
+        @DisplayName("Thread interruption during retrieval restores interrupted status, cancels future, and throws QdrantOperationException")
         void handlesRetrievalInterruption() throws Exception {
             @SuppressWarnings("unchecked")
             ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
-            when(mockFuture.get()).thenThrow(new InterruptedException("Interrupted"));
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Interrupted"));
             when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), anyBoolean(), anyBoolean(), isNull()))
                     .thenReturn(mockFuture);
 
@@ -314,11 +356,52 @@ class QdrantVectorRepositoryTest {
                         () -> repository.findById(sampleId)
                 );
 
+                verify(mockFuture).cancel(true);
                 assertTrue(Thread.currentThread().isInterrupted(), "Interrupted status must be restored");
                 assertEquals("Failed to retrieve vector record due to thread interruption", ex.getMessage());
             } finally {
                 Thread.interrupted();
             }
+        }
+
+        @Test
+        @DisplayName("Timeout during retrieval cancels future and throws QdrantOperationException")
+        void handlesFindByIdTimeout() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Retrieve timed out"));
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), anyBoolean(), anyBoolean(), isNull()))
+                    .thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.findById(sampleId)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to retrieve vector record from Qdrant due to operation timeout", ex.getMessage());
+            assertNotNull(ex.getCause());
+            assertTrue(ex.getCause() instanceof TimeoutException);
+        }
+
+        @Test
+        @DisplayName("Cancellation failure during retrieval timeout does not swallow TimeoutException")
+        void handlesFindByIdTimeoutCancellationFailure() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Retrieve timed out"));
+            when(mockFuture.cancel(true)).thenThrow(new RuntimeException("Cancellation failed"));
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), anyBoolean(), anyBoolean(), isNull()))
+                    .thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.findById(sampleId)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to retrieve vector record from Qdrant due to operation timeout", ex.getMessage());
+            assertTrue(ex.getCause() instanceof TimeoutException);
         }
     }
 
@@ -469,11 +552,11 @@ class QdrantVectorRepositoryTest {
         }
 
         @Test
-        @DisplayName("Thread interruption during search restores interrupted status and throws QdrantOperationException")
+        @DisplayName("Thread interruption during search restores interrupted status, cancels future, and throws QdrantOperationException")
         void handlesSearchInterruption() throws Exception {
             @SuppressWarnings("unchecked")
             ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
-            when(mockFuture.get()).thenThrow(new InterruptedException("Search interrupted"));
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Search interrupted"));
             when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
 
             Thread.interrupted();
@@ -484,11 +567,50 @@ class QdrantVectorRepositoryTest {
                         () -> repository.search(sampleVector, 5)
                 );
 
+                verify(mockFuture).cancel(true);
                 assertTrue(Thread.currentThread().isInterrupted(), "Interrupted status must be restored");
                 assertEquals("Failed to search vector records due to thread interruption", ex.getMessage());
             } finally {
                 Thread.interrupted();
             }
+        }
+
+        @Test
+        @DisplayName("Timeout during search cancels future and throws QdrantOperationException")
+        void handlesSearchTimeout() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Search timed out"));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.search(sampleVector, 5)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to search vector records in Qdrant due to operation timeout", ex.getMessage());
+            assertNotNull(ex.getCause());
+            assertTrue(ex.getCause() instanceof TimeoutException);
+        }
+
+        @Test
+        @DisplayName("Cancellation failure during search timeout does not swallow TimeoutException")
+        void handlesSearchTimeoutCancellationFailure() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Search timed out"));
+            when(mockFuture.cancel(true)).thenThrow(new RuntimeException("Cancellation failed"));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.search(sampleVector, 5)
+            );
+
+            verify(mockFuture).cancel(true);
+            assertEquals("Failed to search vector records in Qdrant due to operation timeout", ex.getMessage());
+            assertTrue(ex.getCause() instanceof TimeoutException);
         }
 
         @Test

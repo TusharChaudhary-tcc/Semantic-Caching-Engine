@@ -29,12 +29,21 @@ class QdrantConfigTest {
             assertFalse(config.isApiKeyConfigured());
             assertEquals("semantic_cache", config.getCollectionName());
             assertEquals(768, config.getVectorSize());
+            assertEquals(10, config.getTimeoutSeconds());
+        }
+
+        @Test
+        @DisplayName("Instantiates with custom positive timeout")
+        void acceptsCustomPositiveTimeout() {
+            QdrantConfig config = new QdrantConfig("localhost", 6334, false, "", "semantic_cache", 768, 25);
+
+            assertEquals(25, config.getTimeoutSeconds());
         }
 
         @Test
         @DisplayName("Instantiates with valid properties with API key")
         void validPropertiesWithApiKey() {
-            QdrantConfig config = new QdrantConfig("qdrant.internal", 6334, true, "secret-test-key", "custom_cache", 768);
+            QdrantConfig config = new QdrantConfig("qdrant.internal", 6334, true, "secret-test-key", "custom_cache", 768, 15);
 
             assertEquals("qdrant.internal", config.getHost());
             assertEquals(6334, config.getPort());
@@ -42,6 +51,7 @@ class QdrantConfigTest {
             assertTrue(config.isApiKeyConfigured());
             assertEquals("custom_cache", config.getCollectionName());
             assertEquals(768, config.getVectorSize());
+            assertEquals(15, config.getTimeoutSeconds());
         }
 
         @Test
@@ -49,6 +59,7 @@ class QdrantConfigTest {
         void nullApiKeyNormalized() {
             QdrantConfig config = new QdrantConfig("localhost", 6334, false, null, "semantic_cache", 768);
             assertFalse(config.isApiKeyConfigured());
+            assertEquals(10, config.getTimeoutSeconds());
         }
     }
 
@@ -92,6 +103,15 @@ class QdrantConfigTest {
                     new QdrantConfig("localhost", 6334, false, "", "semantic_cache", 0));
             assertThrows(IllegalArgumentException.class, () ->
                     new QdrantConfig("localhost", 6334, false, "", "semantic_cache", -1));
+        }
+
+        @Test
+        @DisplayName("Rejects non-positive timeout")
+        void rejectsNonPositiveTimeout() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    new QdrantConfig("localhost", 6334, false, "", "semantic_cache", 768, 0));
+            assertThrows(IllegalArgumentException.class, () ->
+                    new QdrantConfig("localhost", 6334, false, "", "semantic_cache", 768, -1));
         }
     }
 

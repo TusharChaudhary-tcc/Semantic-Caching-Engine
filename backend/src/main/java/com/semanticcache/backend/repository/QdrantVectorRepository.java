@@ -17,6 +17,7 @@ import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.google.common.util.concurrent.ListenableFuture;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -29,6 +30,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Repository
 public class QdrantVectorRepository implements VectorRepository {
@@ -66,6 +69,7 @@ public class QdrantVectorRepository implements VectorRepository {
         String collectionName = qdrantConfig.getCollectionName();
         log.debug("Upserting vector record with ID [{}] into collection [{}]", record.id(), collectionName);
 
+        ListenableFuture<Points.UpdateResult> future = null;
         try {
             Points.PointStruct pointStruct = Points.PointStruct.newBuilder()
                     .setId(PointIdFactory.id(record.id()))
@@ -77,9 +81,16 @@ public class QdrantVectorRepository implements VectorRepository {
                     .putPayload(PAYLOAD_EMBEDDING_MODEL, ValueFactory.value(record.embeddingModel()))
                     .build();
 
-            qdrantClient.upsertAsync(collectionName, List.of(pointStruct)).get();
+            future = qdrantClient.upsertAsync(collectionName, List.of(pointStruct));
+            future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
             log.debug("Successfully upserted vector record with ID [{}] into collection [{}]", record.id(), collectionName);
+        } catch (TimeoutException e) {
+            cancelFuture(future);
+            log.error("Timed out waiting for Qdrant upsert operation in collection [{}] after [{}] seconds",
+                    collectionName, qdrantConfig.getTimeoutSeconds());
+            throw new QdrantOperationException("Failed to upsert vector record in Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            cancelFuture(future);
             Thread.currentThread().interrupt();
             log.error("Thread interrupted while upserting vector record with ID [{}] into collection [{}]",
                     record.id(), collectionName);
@@ -103,14 +114,16 @@ public class QdrantVectorRepository implements VectorRepository {
         String collectionName = qdrantConfig.getCollectionName();
         log.debug("Retrieving vector record with ID [{}] from collection [{}]", id, collectionName);
 
+        ListenableFuture<List<Points.RetrievedPoint>> future = null;
         try {
-            List<Points.RetrievedPoint> points = qdrantClient.retrieveAsync(
+            future = qdrantClient.retrieveAsync(
                     collectionName,
                     PointIdFactory.id(id),
                     true,
                     true,
                     null
-            ).get();
+            );
+            List<Points.RetrievedPoint> points = future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
 
             if (points == null || points.isEmpty()) {
                 log.debug("No vector record found for ID [{}] in collection [{}]", id, collectionName);
@@ -121,7 +134,13 @@ public class QdrantVectorRepository implements VectorRepository {
             return Optional.of(mapToVectorRecord(id, point));
         } catch (QdrantOperationException e) {
             throw e;
+        } catch (TimeoutException e) {
+            cancelFuture(future);
+            log.error("Timed out waiting for Qdrant retrieve operation for ID [{}] in collection [{}] after [{}] seconds",
+                    id, collectionName, qdrantConfig.getTimeoutSeconds());
+            throw new QdrantOperationException("Failed to retrieve vector record from Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            cancelFuture(future);
             Thread.currentThread().interrupt();
             log.error("Thread interrupted while retrieving vector record with ID [{}] from collection [{}]",
                     id, collectionName);
@@ -183,6 +202,7 @@ public class QdrantVectorRepository implements VectorRepository {
         log.debug("Searching collection [{}] for top [{}] similar records (filter: [{}])",
                 collectionName, limit, qdrantFilter != null ? "applied" : "unrestricted");
 
+        ListenableFuture<List<Points.ScoredPoint>> future = null;
         try {
             Points.SearchPoints.Builder searchPointsBuilder = Points.SearchPoints.newBuilder()
                     .setCollectionName(collectionName)
@@ -195,7 +215,8 @@ public class QdrantVectorRepository implements VectorRepository {
                 searchPointsBuilder.setFilter(qdrantFilter);
             }
 
-            List<Points.ScoredPoint> scoredPoints = qdrantClient.searchAsync(searchPointsBuilder.build()).get();
+            future = qdrantClient.searchAsync(searchPointsBuilder.build());
+            List<Points.ScoredPoint> scoredPoints = future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
 
             if (scoredPoints == null || scoredPoints.isEmpty()) {
                 log.debug("No similar records found in collection [{}]", collectionName);
@@ -211,7 +232,13 @@ public class QdrantVectorRepository implements VectorRepository {
             return Collections.unmodifiableList(results);
         } catch (QdrantOperationException e) {
             throw e;
+        } catch (TimeoutException e) {
+            cancelFuture(future);
+            log.error("Timed out waiting for Qdrant search operation in collection [{}] after [{}] seconds",
+                    collectionName, qdrantConfig.getTimeoutSeconds());
+            throw new QdrantOperationException("Failed to search vector records in Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            cancelFuture(future);
             Thread.currentThread().interrupt();
             log.error("Thread interrupted while searching collection [{}]", collectionName);
             throw new QdrantOperationException("Failed to search vector records due to thread interruption", e);
@@ -224,6 +251,16 @@ public class QdrantVectorRepository implements VectorRepository {
             log.error("Failed to search vector records in collection [{}]: exception class [{}]",
                     collectionName, e.getClass().getName());
             throw new QdrantOperationException("Failed to search vector records in Qdrant", e);
+        }
+    }
+
+    private void cancelFuture(ListenableFuture<?> future) {
+        if (future != null) {
+            try {
+                future.cancel(true);
+            } catch (Exception e) {
+                log.warn("Failed to cancel Qdrant future: exception class [{}]", e.getClass().getName());
+            }
         }
     }
 
