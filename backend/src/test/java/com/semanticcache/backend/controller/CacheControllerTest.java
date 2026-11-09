@@ -78,4 +78,25 @@ class CacheControllerTest {
 
         assertTrue(violations.isEmpty());
     }
+
+    @Test
+    @DisplayName("Prompt with exactly 4000 characters passes validation with no violations")
+    void cacheRequestValidationPassesOnBoundaryLengthPrompt() {
+        String boundaryPrompt = "a".repeat(4000);
+        CacheRequest validRequest = new CacheRequest(boundaryPrompt);
+        Set<ConstraintViolation<CacheRequest>> violations = validator.validate(validRequest);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Prompt exceeding 4000 characters triggers validation constraint violation")
+    void cacheRequestValidationFailsOnOverLimitPrompt() {
+        String overLimitPrompt = "a".repeat(4001);
+        CacheRequest invalidRequest = new CacheRequest(overLimitPrompt);
+        Set<ConstraintViolation<CacheRequest>> violations = validator.validate(invalidRequest);
+
+        assertFalse(violations.isEmpty());
+        assertEquals("Prompt cannot exceed 4000 characters", violations.iterator().next().getMessage());
+    }
 }

@@ -4,6 +4,8 @@ import com.semanticcache.backend.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -12,13 +14,25 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final long maxRequestBodyBytes;
+
+    @Autowired
+    public GlobalExceptionHandler(
+            @Value("${cache.max-request-body-bytes:65536}") long maxRequestBodyBytes
+    ) {
+        this.maxRequestBodyBytes = maxRequestBodyBytes;
+    }
 
     /**
      * Catches Bean Validation errors (@Valid on request bodies).
@@ -46,14 +60,49 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Catches unparseable / malformed JSON payloads.
+     * Handles requests whose payload exceeds the configured maximum byte size.
+     * Returns HTTP 413 Payload Too Large.
+     */
+    @ExceptionHandler(PayloadTooLargeException.class)
+    public ResponseEntity<ErrorResponse> handlePayloadTooLargeException(
+            PayloadTooLargeException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Request payload exceeded size limit on {}: exception class [{}]",
+                request.getRequestURI(), ex.getClass().getName());
+
+        ErrorResponse response = ErrorResponse.of(
+                HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                HttpStatus.PAYLOAD_TOO_LARGE.getReasonPhrase(),
+                "Request body exceeds maximum allowed size of " + maxRequestBodyBytes + " bytes",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+    }
+
+    /**
+     * Catches unparseable / malformed JSON payloads, or payload size limits exceeded during deserialization.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadableException(
             HttpMessageNotReadableException ex,
             HttpServletRequest request
     ) {
-        // log.warn("Malformed JSON request received on {}: {}", request.getRequestURI(), ex.getMessage());
+        if (isPayloadTooLarge(ex)) {
+            log.warn("Request payload exceeded size limit on {}: exception class [{}]",
+                    request.getRequestURI(), ex.getClass().getName());
+
+            ErrorResponse response = ErrorResponse.of(
+                    HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                    HttpStatus.PAYLOAD_TOO_LARGE.getReasonPhrase(),
+                    "Request body exceeds maximum allowed size of " + maxRequestBodyBytes + " bytes",
+                    request.getRequestURI()
+            );
+
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+        }
+
         log.warn(
                 "Malformed JSON request received on {}: exception class [{}]",
                 request.getRequestURI(),
@@ -68,6 +117,18 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    private boolean isPayloadTooLarge(Throwable ex) {
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Throwable current = ex;
+        while (current != null && seen.add(current)) {
+            if (current instanceof PayloadTooLargeException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     /**

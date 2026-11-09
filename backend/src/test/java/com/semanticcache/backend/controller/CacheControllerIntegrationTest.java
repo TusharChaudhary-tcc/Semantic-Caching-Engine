@@ -13,26 +13,40 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 class CacheControllerIntegrationTest {
+
+    @LocalServerPort
+    private int port;
 
     @Autowired
     private MockMvc mockMvc;
@@ -89,6 +103,131 @@ class CacheControllerIntegrationTest {
                 .andExpect(jsonPath("$.path", is("/api/cache")))
                 .andExpect(jsonPath("$.validationErrors.prompt", is("Prompt cannot be blank")))
                 .andExpect(jsonPath("$.timestamp", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with 4000-character prompt returns 200 OK")
+    void boundaryLengthPromptReturns200() throws Exception {
+        String prompt = "a".repeat(4000);
+        when(geminiProvider.generateAnswer(eq(prompt)))
+                .thenReturn("Answer for 4000 char prompt");
+
+        mockMvc.perform(post("/api/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\":\"" + prompt + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", is("Answer for 4000 char prompt")))
+                .andExpect(jsonPath("$.cacheHit", is(false)));
+
+        verify(geminiProvider).generateAnswer(eq(prompt));
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with 4001-character prompt returns 400 Bad Request and does not invoke downstream services")
+    void overLimitPromptReturns400() throws Exception {
+        String prompt = "a".repeat(4001);
+
+        mockMvc.perform(post("/api/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\":\"" + prompt + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.error", is("Bad Request")))
+                .andExpect(jsonPath("$.message", is("Validation failed for one or more fields")))
+                .andExpect(jsonPath("$.path", is("/api/cache")))
+                .andExpect(jsonPath("$.validationErrors.prompt", is("Prompt cannot exceed 4000 characters")))
+                .andExpect(jsonPath("$.timestamp", notNullValue()));
+
+        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheDecisionService, never()).evaluate(any(), any());
+        verify(geminiProvider, never()).generateAnswer(anyString());
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with Content-Length exceeding 65536 bytes returns 413 Payload Too Large")
+    void declaredContentLengthExceedingLimitReturns413() throws Exception {
+        byte[] payload = "{\"prompt\":\"test\"}".getBytes();
+
+        mockMvc.perform(post("/api/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Content-Length", 70000)
+                        .content(payload))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.status", is(413)))
+                .andExpect(jsonPath("$.error", is("Payload Too Large")))
+                .andExpect(jsonPath("$.message", is("Request body exceeds maximum allowed size of 65536 bytes")))
+                .andExpect(jsonPath("$.path", is("/api/cache")))
+                .andExpect(jsonPath("$.timestamp", notNullValue()));
+
+        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheDecisionService, never()).evaluate(any(), any());
+        verify(geminiProvider, never()).generateAnswer(anyString());
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with oversized JSON body via MockMvc returns 413 Payload Too Large")
+    void oversizedBodyWithCalculatedContentLengthReturns413() throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"prompt\":\"hello\",\"extra\":\"");
+        while (sb.length() < 70000) {
+            sb.append("x");
+        }
+        sb.append("\"}");
+
+        mockMvc.perform(post("/api/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(sb.toString().getBytes()))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.status", is(413)))
+                .andExpect(jsonPath("$.error", is("Payload Too Large")))
+                .andExpect(jsonPath("$.message", is("Request body exceeds maximum allowed size of 65536 bytes")))
+                .andExpect(jsonPath("$.path", is("/api/cache")))
+                .andExpect(jsonPath("$.timestamp", notNullValue()));
+
+        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheDecisionService, never()).evaluate(any(), any());
+        verify(geminiProvider, never()).generateAnswer(anyString());
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with chunked streaming body without Content-Length returns 413 Payload Too Large")
+    void genuineChunkedStreamExceedingLimitReturns413() throws Exception {
+        byte[] payload = ("{\"prompt\":\"" + "a".repeat(70000) + "\"}").getBytes(StandardCharsets.UTF_8);
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/cache"))
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(payload)))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(413, response.statusCode());
+        assertTrue(response.body().contains("\"status\":413"));
+        assertTrue(response.body().contains("\"error\":\"Payload Too Large\""));
+        assertTrue(response.body().contains("\"message\":\"Request body exceeds maximum allowed size of 65536 bytes\""));
+        assertTrue(response.body().contains("\"path\":\"/api/cache\""));
+
+        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheDecisionService, never()).evaluate(any(), any());
+        verify(geminiProvider, never()).generateAnswer(anyString());
+    }
+
+    @Test
+    @DisplayName("POST /api/cache with valid JSON body under the limit is not rejected by size filter")
+    void validBodyUnderLimitNotRejectedBySizeFilter() throws Exception {
+        when(geminiProvider.generateAnswer(eq("Explain neural networks")))
+                .thenReturn("Neural networks answer");
+
+        mockMvc.perform(post("/api/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\":\"Explain neural networks\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", is("Neural networks answer")))
+                .andExpect(jsonPath("$.cacheHit", is(false)));
+
+        verify(geminiProvider).generateAnswer(eq("Explain neural networks"));
     }
 
     @Test
