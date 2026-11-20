@@ -8,6 +8,7 @@ import com.semanticcache.backend.exception.GeminiApiException;
 import com.semanticcache.backend.exception.GeminiEmptyResponseException;
 import com.semanticcache.backend.exception.GeminiMissingCredentialsException;
 import com.semanticcache.backend.exception.QdrantOperationException;
+import com.semanticcache.backend.repository.VectorRepository;
 import com.semanticcache.backend.service.CacheDecisionService;
 import com.semanticcache.backend.service.CacheRetrievalService;
 import com.semanticcache.backend.service.DefaultCacheDecisionService;
@@ -69,6 +70,11 @@ class CacheControllerIntegrationTest {
     @MockitoBean
     private GeminiProvider geminiProvider;
 
+    @MockitoBean
+    private VectorRepository vectorRepository;
+
+    private final java.util.List<Float> sampleVector = java.util.Collections.nCopies(768, 0.05f);
+
     /**
      * Real DefaultCacheDecisionService instance used to exercise genuine privacy and threshold
      * evaluation logic where practical while isolating external vector retrieval and LLM boundaries.
@@ -80,6 +86,8 @@ class CacheControllerIntegrationTest {
     void setUpMocks() {
         when(cacheRetrievalService.findBestCandidate(anyString(), any(SearchFilter.class)))
                 .thenReturn(Optional.empty());
+        when(cacheRetrievalService.findBestCandidateWithVector(anyString(), any(SearchFilter.class)))
+                .thenReturn(new com.semanticcache.backend.dto.CacheRetrievalResult(Optional.empty(), sampleVector));
         when(cacheDecisionService.evaluate(any(), any(SearchFilter.class)))
                 .thenAnswer(invocation -> realCacheDecisionService.evaluate(
                         invocation.getArgument(0), invocation.getArgument(1)));
@@ -155,7 +163,7 @@ class CacheControllerIntegrationTest {
                 .andExpect(jsonPath("$.validationErrors.prompt", is("Prompt cannot exceed 4000 characters")))
                 .andExpect(jsonPath("$.timestamp", notNullValue()));
 
-        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheRetrievalService, never()).findBestCandidateWithVector(anyString(), any());
         verify(cacheDecisionService, never()).evaluate(any(), any());
         verify(geminiProvider, never()).generateAnswer(anyString());
     }
@@ -176,7 +184,7 @@ class CacheControllerIntegrationTest {
                 .andExpect(jsonPath("$.path", is("/api/cache")))
                 .andExpect(jsonPath("$.timestamp", notNullValue()));
 
-        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheRetrievalService, never()).findBestCandidateWithVector(anyString(), any());
         verify(cacheDecisionService, never()).evaluate(any(), any());
         verify(geminiProvider, never()).generateAnswer(anyString());
     }
@@ -201,7 +209,7 @@ class CacheControllerIntegrationTest {
                 .andExpect(jsonPath("$.path", is("/api/cache")))
                 .andExpect(jsonPath("$.timestamp", notNullValue()));
 
-        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheRetrievalService, never()).findBestCandidateWithVector(anyString(), any());
         verify(cacheDecisionService, never()).evaluate(any(), any());
         verify(geminiProvider, never()).generateAnswer(anyString());
     }
@@ -226,7 +234,7 @@ class CacheControllerIntegrationTest {
         assertTrue(response.body().contains("\"message\":\"Request body exceeds maximum allowed size of 65536 bytes\""));
         assertTrue(response.body().contains("\"path\":\"/api/cache\""));
 
-        verify(cacheRetrievalService, never()).findBestCandidate(anyString(), any());
+        verify(cacheRetrievalService, never()).findBestCandidateWithVector(anyString(), any());
         verify(cacheDecisionService, never()).evaluate(any(), any());
         verify(geminiProvider, never()).generateAnswer(anyString());
     }
@@ -344,8 +352,8 @@ class CacheControllerIntegrationTest {
                 null,
                 "PUBLIC"
         );
-        when(cacheRetrievalService.findBestCandidate(eq("What is caching?"), eq(SearchFilter.publicOnly())))
-                .thenReturn(Optional.of(publicCandidate));
+        when(cacheRetrievalService.findBestCandidateWithVector(eq("What is caching?"), eq(SearchFilter.publicOnly())))
+                .thenReturn(new com.semanticcache.backend.dto.CacheRetrievalResult(Optional.of(publicCandidate), sampleVector));
 
         // Real DefaultCacheDecisionService evaluates candidate: score 0.95 >= 0.85 threshold, visibility PUBLIC -> HIT
         mockMvc.perform(post("/api/cache")
@@ -364,7 +372,7 @@ class CacheControllerIntegrationTest {
 
         // Explicitly verify retrieval service received internally generated SearchFilter.publicOnly() for anonymous request
         ArgumentCaptor<SearchFilter> filterCaptor = ArgumentCaptor.forClass(SearchFilter.class);
-        verify(cacheRetrievalService).findBestCandidate(eq("What is caching?"), filterCaptor.capture());
+        verify(cacheRetrievalService).findBestCandidateWithVector(eq("What is caching?"), filterCaptor.capture());
         assertEquals(SearchFilter.publicOnly(), filterCaptor.getValue());
         assertTrue(filterCaptor.getValue().isPublicOnly());
         assertFalse(filterCaptor.getValue().hasOwner());
@@ -385,8 +393,8 @@ class CacheControllerIntegrationTest {
                 "user-secret-123",
                 "PRIVATE"
         );
-        when(cacheRetrievalService.findBestCandidate(eq("What is my secret account balance?"), eq(SearchFilter.publicOnly())))
-                .thenReturn(Optional.of(privateCandidate));
+        when(cacheRetrievalService.findBestCandidateWithVector(eq("What is my secret account balance?"), eq(SearchFilter.publicOnly())))
+                .thenReturn(new com.semanticcache.backend.dto.CacheRetrievalResult(Optional.of(privateCandidate), sampleVector));
         when(geminiProvider.generateAnswer(eq("What is my secret account balance?")))
                 .thenReturn("Account details cannot be retrieved anonymously.");
 
@@ -407,7 +415,7 @@ class CacheControllerIntegrationTest {
 
         // Explicitly verify retrieval service received internally generated SearchFilter.publicOnly() for anonymous request
         ArgumentCaptor<SearchFilter> filterCaptor = ArgumentCaptor.forClass(SearchFilter.class);
-        verify(cacheRetrievalService).findBestCandidate(eq("What is my secret account balance?"), filterCaptor.capture());
+        verify(cacheRetrievalService).findBestCandidateWithVector(eq("What is my secret account balance?"), filterCaptor.capture());
         assertEquals(SearchFilter.publicOnly(), filterCaptor.getValue());
         assertTrue(filterCaptor.getValue().isPublicOnly());
         assertFalse(filterCaptor.getValue().hasOwner());
@@ -417,7 +425,7 @@ class CacheControllerIntegrationTest {
     @DisplayName("POST /api/cache propagates Qdrant retrieval exception as sanitized HTTP 502 and never calls Gemini")
     void qdrantRetrievalExceptionPropagatesAsHttp502() throws Exception {
         // External retrieval boundary: Qdrant vector retrieval throws runtime exception
-        when(cacheRetrievalService.findBestCandidate(eq("Explain neural networks"), eq(SearchFilter.publicOnly())))
+        when(cacheRetrievalService.findBestCandidateWithVector(eq("Explain neural networks"), eq(SearchFilter.publicOnly())))
                 .thenThrow(new QdrantOperationException("Qdrant connection timed out during vector similarity search"));
 
         mockMvc.perform(post("/api/cache")
@@ -439,7 +447,7 @@ class CacheControllerIntegrationTest {
 
         // Explicitly verify retrieval service received internally generated SearchFilter.publicOnly() for anonymous request
         ArgumentCaptor<SearchFilter> filterCaptor = ArgumentCaptor.forClass(SearchFilter.class);
-        verify(cacheRetrievalService).findBestCandidate(eq("Explain neural networks"), filterCaptor.capture());
+        verify(cacheRetrievalService).findBestCandidateWithVector(eq("Explain neural networks"), filterCaptor.capture());
         assertEquals(SearchFilter.publicOnly(), filterCaptor.getValue());
         assertTrue(filterCaptor.getValue().isPublicOnly());
         assertFalse(filterCaptor.getValue().hasOwner());

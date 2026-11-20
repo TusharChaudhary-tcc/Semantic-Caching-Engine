@@ -248,6 +248,65 @@ class SimilaritySearchServiceTest {
     }
 
     @Nested
+    @DisplayName("searchWithVector Tests")
+    class SearchWithVectorTests {
+
+        @Test
+        @DisplayName("Calls embedding service exactly once and returns both results and exact vector")
+        void callsEmbeddingServiceOnceAndReturnsCarrier() {
+            String query = "search with vector query";
+            SearchFilter filter = SearchFilter.publicOnly();
+            when(mockEmbeddingService.getEmbedding(query)).thenReturn(sampleEmbeddingResponse);
+            when(mockVectorRepository.search(sampleVector, 5, filter)).thenReturn(List.of(sampleResult1));
+
+            com.semanticcache.backend.dto.SimilaritySearchResults response =
+                    searchService.searchWithVector(query, 5, filter);
+
+            verify(mockEmbeddingService, org.mockito.Mockito.times(1)).getEmbedding(query);
+            verify(mockVectorRepository, org.mockito.Mockito.times(1)).search(sampleVector, 5, filter);
+
+            assertEquals(List.of(sampleResult1), response.results());
+            assertEquals(sampleVector, response.queryVector());
+        }
+
+        @Test
+        @DisplayName("Rejects null or blank query")
+        void rejectsNullOrBlankQuery() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    searchService.searchWithVector(null, 5, SearchFilter.publicOnly()));
+            assertThrows(IllegalArgumentException.class, () ->
+                    searchService.searchWithVector("   ", 5, SearchFilter.publicOnly()));
+        }
+
+        @Test
+        @DisplayName("Rejects invalid limit")
+        void rejectsInvalidLimit() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    searchService.searchWithVector("valid", 0, SearchFilter.publicOnly()));
+            assertThrows(IllegalArgumentException.class, () ->
+                    searchService.searchWithVector("valid", MAX_LIMIT + 1, SearchFilter.publicOnly()));
+        }
+
+        @Test
+        @DisplayName("Rejects null SearchFilter")
+        void rejectsNullFilter() {
+            assertThrows(NullPointerException.class, () ->
+                    searchService.searchWithVector("valid", 5, null));
+        }
+
+        @Test
+        @DisplayName("Enforces configured dimension in searchWithVector")
+        void enforcesDimension() {
+            List<Float> shortVector = new ArrayList<>(Collections.nCopies(512, 0.05f));
+            EmbeddingResponse shortResponse = new EmbeddingResponse(shortVector, 512);
+            when(mockEmbeddingService.getEmbedding("valid")).thenReturn(shortResponse);
+
+            assertThrows(EmbeddingException.class, () ->
+                    searchService.searchWithVector("valid", 5, SearchFilter.publicOnly()));
+        }
+    }
+
+    @Nested
     @DisplayName("Query, Limit, and Filter Validation Tests")
     class ValidationTests {
 

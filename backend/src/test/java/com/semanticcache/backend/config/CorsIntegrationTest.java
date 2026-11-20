@@ -47,17 +47,24 @@ class CorsIntegrationTest {
     @MockitoBean
     private GeminiProvider geminiProvider;
 
+    @MockitoBean
+    private com.semanticcache.backend.repository.VectorRepository vectorRepository;
+
+    private final java.util.List<Float> sampleVector = java.util.Collections.nCopies(768, 0.05f);
+
     @BeforeEach
     void setUp() {
         when(cacheRetrievalService.findBestCandidate(anyString(), any(SearchFilter.class)))
                 .thenReturn(Optional.empty());
+        when(cacheRetrievalService.findBestCandidateWithVector(anyString(), any(SearchFilter.class)))
+                .thenReturn(new com.semanticcache.backend.dto.CacheRetrievalResult(Optional.empty(), sampleVector));
         when(cacheDecisionService.evaluate(any(), any(SearchFilter.class)))
                 .thenReturn(CacheLookupResult.missNoCandidate());
         when(geminiProvider.generateAnswer(any())).thenReturn("Mock answer for CORS test");
     }
 
     @Test
-    @DisplayName("Preflight OPTIONS request from allowed origin returns 200 with CORS headers")
+    @DisplayName("Preflight OPTIONS request from allowed origin returns 200 with CORS headers and credentials")
     void preflightRequestFromAllowedOriginSucceeds() throws Exception {
         mockMvc.perform(options("/api/cache")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
@@ -66,20 +73,47 @@ class CorsIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString("POST")))
-                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
-    @DisplayName("GET /api/health from allowed origin includes Access-Control-Allow-Origin")
+    @DisplayName("Preflight OPTIONS request with Authorization header from allowed origin succeeds")
+    void preflightRequestWithAuthorizationHeaderSucceeds() throws Exception {
+        mockMvc.perform(options("/api/cache")
+                        .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Authorization")));
+    }
+
+    @Test
+    @DisplayName("Preflight OPTIONS request with X-Requested-With header from allowed origin succeeds")
+    void preflightRequestWithXRequestedWithHeaderSucceeds() throws Exception {
+        mockMvc.perform(options("/api/auth/refresh")
+                        .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-Requested-With"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("X-Requested-With")));
+    }
+
+    @Test
+    @DisplayName("GET /api/health from allowed origin includes Access-Control-Allow-Origin and Credentials")
     void getHealthFromAllowedOriginIncludesCorsHeader() throws Exception {
         mockMvc.perform(get("/api/health")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
-    @DisplayName("POST /api/cache from allowed origin includes Access-Control-Allow-Origin")
+    @DisplayName("POST /api/cache from allowed origin includes Access-Control-Allow-Origin and Credentials")
     void postCacheFromAllowedOriginIncludesCorsHeader() throws Exception {
         mockMvc.perform(post("/api/cache")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
@@ -90,7 +124,8 @@ class CorsIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
@@ -109,6 +144,20 @@ class CorsIntegrationTest {
     void getHealthFromDisallowedOriginHasNoCorsHeader() throws Exception {
         mockMvc.perform(get("/api/health")
                         .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    @DisplayName("POST /api/cache from disallowed origin does not receive Access-Control-Allow-Origin")
+    void postCacheFromDisallowedOriginHasNoCorsHeader() throws Exception {
+        mockMvc.perform(post("/api/cache")
+                        .header(HttpHeaders.ORIGIN, DISALLOWED_ORIGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "prompt": "What is semantic caching?"
+                                }
+                                """))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 }

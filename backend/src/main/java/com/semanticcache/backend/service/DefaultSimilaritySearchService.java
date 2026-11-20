@@ -4,6 +4,7 @@ import com.semanticcache.backend.config.SearchConfig;
 import com.semanticcache.backend.dto.EmbeddingResponse;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
+import com.semanticcache.backend.dto.SimilaritySearchResults;
 import com.semanticcache.backend.exception.EmbeddingException;
 import com.semanticcache.backend.repository.VectorRepository;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,6 +63,11 @@ public class DefaultSimilaritySearchService implements SimilaritySearchService {
 
     @Override
     public List<SearchResult> search(String query, int limit, SearchFilter filter) {
+        return searchWithVector(query, limit, filter).results();
+    }
+
+    @Override
+    public SimilaritySearchResults searchWithVector(String query, int limit, SearchFilter filter) {
         if (query == null || query.trim().isEmpty()) {
             throw new IllegalArgumentException("query must not be null or blank");
         }
@@ -95,7 +102,7 @@ public class DefaultSimilaritySearchService implements SimilaritySearchService {
         List<SearchResult> results = vectorRepository.search(queryVector, limit, filter);
         log.debug("Similarity search returned [{}] results", results != null ? results.size() : 0);
 
-        return results;
+        return new SimilaritySearchResults(results != null ? results : Collections.emptyList(), queryVector);
     }
 
     public int getExpectedDimension() {

@@ -149,6 +149,69 @@ class CacheRetrievalServiceTest {
     }
 
     @Nested
+    @DisplayName("findBestCandidateWithVector Operations")
+    class FindBestCandidateWithVectorTests {
+
+        @Test
+        @DisplayName("Returns candidate with exact vector when search finds a match")
+        void returnsCandidateWithVector() {
+            List<Float> vector = List.of(0.1f, 0.2f, 0.3f);
+            SearchFilter filter = SearchFilter.publicOnly();
+            com.semanticcache.backend.dto.SimilaritySearchResults searchResults =
+                    new com.semanticcache.backend.dto.SimilaritySearchResults(List.of(sampleCandidate), vector);
+
+            when(mockSimilaritySearchService.searchWithVector("test query", 1, filter))
+                    .thenReturn(searchResults);
+
+            com.semanticcache.backend.dto.CacheRetrievalResult result =
+                    retrievalService.findBestCandidateWithVector("  test query  ", filter);
+
+            verify(mockSimilaritySearchService, org.mockito.Mockito.times(1))
+                    .searchWithVector("test query", 1, filter);
+
+            assertTrue(result.candidate().isPresent());
+            assertSame(sampleCandidate, result.candidate().get());
+            assertEquals(vector, result.queryVector());
+        }
+
+        @Test
+        @DisplayName("Returns Optional.empty() candidate while retaining vector when search returns empty")
+        void returnsEmptyCandidateWithVector() {
+            List<Float> vector = List.of(0.4f, 0.5f, 0.6f);
+            SearchFilter filter = SearchFilter.publicOnly();
+            com.semanticcache.backend.dto.SimilaritySearchResults searchResults =
+                    new com.semanticcache.backend.dto.SimilaritySearchResults(Collections.emptyList(), vector);
+
+            when(mockSimilaritySearchService.searchWithVector("unknown query", 1, filter))
+                    .thenReturn(searchResults);
+
+            com.semanticcache.backend.dto.CacheRetrievalResult result =
+                    retrievalService.findBestCandidateWithVector("unknown query", filter);
+
+            assertTrue(result.candidate().isEmpty());
+            assertEquals(vector, result.queryVector());
+        }
+
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = {"   ", "\t", "\n"})
+        @DisplayName("Rejects null or blank queries")
+        void rejectsNullOrBlankQuery(String invalidQuery) {
+            assertThrows(IllegalArgumentException.class, () ->
+                    retrievalService.findBestCandidateWithVector(invalidQuery, SearchFilter.publicOnly()));
+            verify(mockSimilaritySearchService, never()).searchWithVector(any(), anyInt(), any());
+        }
+
+        @Test
+        @DisplayName("Rejects null SearchFilter")
+        void rejectsNullFilter() {
+            assertThrows(NullPointerException.class, () ->
+                    retrievalService.findBestCandidateWithVector("query", null));
+            verify(mockSimilaritySearchService, never()).searchWithVector(any(), anyInt(), any());
+        }
+    }
+
+    @Nested
     @DisplayName("Exception Propagation")
     class ExceptionPropagationTests {
 

@@ -1,7 +1,9 @@
 package com.semanticcache.backend.service;
 
+import com.semanticcache.backend.dto.CacheRetrievalResult;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
+import com.semanticcache.backend.dto.SimilaritySearchResults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -45,5 +47,27 @@ public class DefaultCacheRetrievalService implements CacheRetrievalService {
         SearchResult best = candidates.get(0);
         log.debug("Found candidate with ID [{}] and score [{}]", best.id(), best.score());
         return Optional.of(best);
+    }
+
+    @Override
+    public CacheRetrievalResult findBestCandidateWithVector(String query, SearchFilter filter) {
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("query must not be null or blank");
+        }
+        Objects.requireNonNull(filter, "filter must not be null");
+
+        log.debug("Retrieving best cache candidate with vector and filter [{}]", filter);
+
+        SimilaritySearchResults searchResults = similaritySearchService.searchWithVector(query.trim(), 1, filter);
+
+        List<SearchResult> candidates = searchResults.results();
+        Optional<SearchResult> candidate = (candidates == null || candidates.isEmpty())
+                ? Optional.empty()
+                : Optional.of(candidates.get(0));
+
+        candidate.ifPresent(best ->
+                log.debug("Found candidate with ID [{}] and score [{}]", best.id(), best.score()));
+
+        return new CacheRetrievalResult(candidate, searchResults.queryVector());
     }
 }

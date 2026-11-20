@@ -7,6 +7,13 @@ import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
 import com.semanticcache.backend.dto.VectorRecord;
 import com.semanticcache.backend.exception.QdrantOperationException;
+import com.semanticcache.backend.telemetry.CacheMetrics;
+import io.grpc.Status;
+import io.grpc.StatusException;
+import io.grpc.StatusRuntimeException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.qdrant.client.PointIdFactory;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.ValueFactory;
@@ -39,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,6 +70,8 @@ class QdrantVectorRepositoryTest {
     @Mock
     private QdrantClient mockClient;
 
+    private SimpleMeterRegistry meterRegistry;
+    private CacheMetrics cacheMetrics;
     private QdrantConfig qdrantConfig;
     private QdrantVectorRepository repository;
 
@@ -72,8 +82,10 @@ class QdrantVectorRepositoryTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        cacheMetrics = new CacheMetrics(meterRegistry);
         qdrantConfig = new QdrantConfig("localhost", 6334, false, "", COLLECTION_NAME, VECTOR_SIZE);
-        repository = new QdrantVectorRepository(mockClient, qdrantConfig);
+        repository = new QdrantVectorRepository(mockClient, qdrantConfig, cacheMetrics);
 
         sampleId = UUID.randomUUID();
         sampleVector = new ArrayList<>(Collections.nCopies(VECTOR_SIZE, 0.05f));
@@ -178,6 +190,7 @@ class QdrantVectorRepositoryTest {
             assertEquals("gemini-3.8-flash", payload.get("model").getStringValue());
             assertEquals("2026-11-07T20:00:00Z", payload.get("createdAt").getStringValue());
             assertEquals("gemini-embedding-001", payload.get("embeddingModel").getStringValue());
+            assertEquals("PUBLIC", payload.get("visibility").getStringValue());
         }
 
         @Test
@@ -191,7 +204,7 @@ class QdrantVectorRepositoryTest {
         @DisplayName("Rejects record when vector dimension does not match configured dimension before calling Qdrant")
         void rejectsVectorDimensionMismatch() {
             QdrantConfig mismatchConfig = new QdrantConfig("localhost", 6334, false, "", COLLECTION_NAME, 512);
-            QdrantVectorRepository mismatchRepo = new QdrantVectorRepository(mockClient, mismatchConfig);
+            QdrantVectorRepository mismatchRepo = new QdrantVectorRepository(mockClient, mismatchConfig, cacheMetrics);
 
             IllegalArgumentException ex = assertThrows(
                     IllegalArgumentException.class,
@@ -939,6 +952,722 @@ class QdrantVectorRepositoryTest {
                     () -> repository.buildQdrantFilter(invalidFilter)
             );
             assertTrue(ex.getMessage().contains("Unsupported SearchFilter state"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Constructor and Validation Tests")
+    class ConstructorValidationTests {
+
+        @Test
+        @DisplayName("Rejects null QdrantClient with NullPointerException")
+        void rejectsNullQdrantClient() {
+            NullPointerException ex = assertThrows(
+                    NullPointerException.class,
+                    () -> new QdrantVectorRepository(null, qdrantConfig, cacheMetrics)
+            );
+            assertEquals("qdrantClient must not be null", ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("Rejects null QdrantConfig with NullPointerException")
+        void rejectsNullQdrantConfig() {
+            NullPointerException ex = assertThrows(
+                    NullPointerException.class,
+                    () -> new QdrantVectorRepository(mockClient, null, cacheMetrics)
+            );
+            assertEquals("qdrantConfig must not be null", ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("Rejects null CacheMetrics with NullPointerException")
+        void rejectsNullCacheMetrics() {
+            NullPointerException ex = assertThrows(
+                    NullPointerException.class,
+                    () -> new QdrantVectorRepository(mockClient, qdrantConfig, null)
+            );
+            assertEquals("cacheMetrics must not be null", ex.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("Metrics and Telemetry Verification Tests")
+    class TelemetryTests {
+
+        // ==========================================
+        // UPSERT Telemetry Tests
+        // ==========================================
+
+        @Test
+        @DisplayName("Upsert success records exactly one UPSERT SUCCESS counter and timer")
+        void upsertSuccessRecordsExpectedMetrics() throws Exception {
+            Points.UpdateResult updateResult = Points.UpdateResult.newBuilder()
+                    .setStatus(Points.UpdateStatus.Completed)
+                    .build();
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any()))
+                    .thenReturn(Futures.immediateFuture(updateResult));
+
+            repository.upsert(sampleRecord);
+
+            Counter successCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .counter();
+            assertNotNull(successCounter);
+            assertEquals(1.0, successCounter.count());
+
+            Timer successTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .timer();
+            assertNotNull(successTimer);
+            assertEquals(1, successTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Upsert timeout records exactly one UPSERT TIMEOUT counter and timer and cancels future")
+        void upsertTimeoutRecordsTimeoutMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Upsert timed out"));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.upsert(sampleRecord));
+
+            verify(mockFuture).cancel(true);
+
+            Counter timeoutCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .counter();
+            assertNotNull(timeoutCounter);
+            assertEquals(1.0, timeoutCounter.count());
+
+            Timer timeoutTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .timer();
+            assertNotNull(timeoutTimer);
+            assertEquals(1, timeoutTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Upsert interruption records exactly one UPSERT ERROR counter and timer, cancels future and restores interrupt flag")
+        void upsertInterruptionRecordsErrorMetricAndRestoresInterrupt() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Upsert interrupted"));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            try {
+                assertThrows(QdrantOperationException.class, () -> repository.upsert(sampleRecord));
+                assertTrue(Thread.currentThread().isInterrupted(), "Thread interrupt flag must be restored");
+            } finally {
+                Thread.interrupted();
+            }
+
+            verify(mockFuture).cancel(true);
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("Upsert ExecutionException with gRPC DEADLINE_EXCEEDED records exactly one UPSERT TIMEOUT counter and timer")
+        void upsertDeadlineExceededRecordsTimeoutMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new StatusRuntimeException(Status.DEADLINE_EXCEEDED)));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.upsert(sampleRecord));
+
+            Counter timeoutCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .counter();
+            assertNotNull(timeoutCounter);
+            assertEquals(1.0, timeoutCounter.count());
+
+            Timer timeoutTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .timer();
+            assertNotNull(timeoutTimer);
+            assertEquals(1, timeoutTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Upsert ExecutionException with generic cause records exactly one UPSERT ERROR counter and timer")
+        void upsertGenericExecutionExceptionRecordsErrorMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<Points.UpdateResult> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new RuntimeException("gRPC transport failure")));
+            when(mockClient.upsertAsync(eq(COLLECTION_NAME), any())).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.upsert(sampleRecord));
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "upsert")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("Upsert validation failure records zero metrics")
+        void upsertValidationFailureRecordsZeroMetrics() {
+            assertThrows(NullPointerException.class, () -> repository.upsert(null));
+
+            VectorRecord badRecord = new VectorRecord(
+                    sampleId,
+                    new ArrayList<>(Collections.nCopies(256, 0.1f)),
+                    "p", "a", "m", Instant.now(), "em"
+            );
+            assertThrows(IllegalArgumentException.class, () -> repository.upsert(badRecord));
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "upsert").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "upsert").timer());
+        }
+
+        // ==========================================
+        // RETRIEVE (findById) Telemetry Tests
+        // ==========================================
+
+        @Test
+        @DisplayName("FindById success with matching point records exactly one RETRIEVE SUCCESS counter and timer")
+        void findByIdSuccessWithPointRecordsMetric() throws Exception {
+            Map<String, String> payload = Map.of(
+                    "prompt", "What is cache?",
+                    "answer", "Cache is fast storage.",
+                    "model", "gemini-3.8-flash",
+                    "createdAt", "2026-11-07T20:00:00Z",
+                    "embeddingModel", "gemini-embedding-001"
+            );
+            Points.RetrievedPoint point = buildRetrievedPoint(sampleId, sampleVector, payload);
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(Futures.immediateFuture(List.of(point)));
+
+            Optional<VectorRecord> result = repository.findById(sampleId);
+            assertTrue(result.isPresent());
+
+            Counter successCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .counter();
+            assertNotNull(successCounter);
+            assertEquals(1.0, successCounter.count());
+
+            Timer successTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .timer();
+            assertNotNull(successTimer);
+            assertEquals(1, successTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("FindById success with empty list records exactly one RETRIEVE SUCCESS counter and timer")
+        void findByIdSuccessEmptyRecordsMetric() throws Exception {
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(Futures.immediateFuture(Collections.emptyList()));
+
+            Optional<VectorRecord> result = repository.findById(sampleId);
+            assertTrue(result.isEmpty());
+
+            Counter successCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .counter();
+            assertNotNull(successCounter);
+            assertEquals(1.0, successCounter.count());
+
+            Timer successTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .timer();
+            assertNotNull(successTimer);
+            assertEquals(1, successTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("FindById timeout records exactly one RETRIEVE TIMEOUT counter and timer and cancels future")
+        void findByIdTimeoutRecordsTimeoutMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Retrieve timed out"));
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.findById(sampleId));
+
+            verify(mockFuture).cancel(true);
+
+            Counter timeoutCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .counter();
+            assertNotNull(timeoutCounter);
+            assertEquals(1.0, timeoutCounter.count());
+
+            Timer timeoutTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .timer();
+            assertNotNull(timeoutTimer);
+            assertEquals(1, timeoutTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("FindById interruption records exactly one RETRIEVE ERROR counter and timer and restores interrupt flag")
+        void findByIdInterruptionRecordsErrorMetricAndRestoresInterrupt() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Retrieve interrupted"));
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(mockFuture);
+
+            try {
+                assertThrows(QdrantOperationException.class, () -> repository.findById(sampleId));
+                assertTrue(Thread.currentThread().isInterrupted(), "Thread interrupt flag must be restored");
+            } finally {
+                Thread.interrupted();
+            }
+
+            verify(mockFuture).cancel(true);
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("FindById receiving generic ExecutionException throws QdrantOperationException and records exactly one RETRIEVE ERROR counter and timer")
+        void findByIdGenericExecutionExceptionRecordsErrorMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.RetrievedPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new RuntimeException("gRPC retrieve failure")));
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(mockFuture);
+
+            QdrantOperationException ex = assertThrows(
+                    QdrantOperationException.class,
+                    () -> repository.findById(sampleId)
+            );
+            assertEquals("Failed to retrieve vector record from Qdrant", ex.getMessage());
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("FindById mapping failure records exactly one RETRIEVE ERROR counter and timer")
+        void findByIdMappingFailureRecordsErrorMetric() throws Exception {
+            Points.RetrievedPoint invalidPoint = Points.RetrievedPoint.newBuilder()
+                    .setId(PointIdFactory.id(sampleId))
+                    .build();
+            when(mockClient.retrieveAsync(eq(COLLECTION_NAME), any(Common.PointId.class), eq(true), eq(true), isNull(Points.ReadConsistency.class)))
+                    .thenReturn(Futures.immediateFuture(List.of(invalidPoint)));
+
+            assertThrows(QdrantOperationException.class, () -> repository.findById(sampleId));
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "retrieve")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+        }
+
+        @Test
+        @DisplayName("FindById null ID records zero metrics")
+        void findByIdNullIdRecordsZeroMetrics() {
+            assertThrows(NullPointerException.class, () -> repository.findById(null));
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "retrieve").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "retrieve").timer());
+        }
+
+        // ==========================================
+        // SEARCH Telemetry Tests
+        // ==========================================
+
+        @Test
+        @DisplayName("Search success with scored points records exactly one SEARCH SUCCESS counter and timer")
+        void searchSuccessWithResultsRecordsMetric() throws Exception {
+            Map<String, String> payload = Map.of(
+                    "prompt", "prompt",
+                    "answer", "answer",
+                    "model", "model",
+                    "createdAt", "2026-11-07T20:00:00Z",
+                    "embeddingModel", "em"
+            );
+            Points.ScoredPoint point = buildScoredPoint(sampleId, 0.95f, payload);
+            when(mockClient.searchAsync(any(Points.SearchPoints.class)))
+                    .thenReturn(Futures.immediateFuture(List.of(point)));
+
+            List<SearchResult> results = repository.search(sampleVector, 5);
+            assertEquals(1, results.size());
+
+            Counter successCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .counter();
+            assertNotNull(successCounter);
+            assertEquals(1.0, successCounter.count());
+
+            Timer successTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .timer();
+            assertNotNull(successTimer);
+            assertEquals(1, successTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Search success with empty list records exactly one SEARCH SUCCESS counter and timer")
+        void searchSuccessEmptyRecordsMetric() throws Exception {
+            when(mockClient.searchAsync(any(Points.SearchPoints.class)))
+                    .thenReturn(Futures.immediateFuture(Collections.emptyList()));
+
+            List<SearchResult> results = repository.search(sampleVector, 5);
+            assertTrue(results.isEmpty());
+
+            Counter successCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .counter();
+            assertNotNull(successCounter);
+            assertEquals(1.0, successCounter.count());
+
+            Timer successTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "success")
+                    .timer();
+            assertNotNull(successTimer);
+            assertEquals(1, successTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Search timeout records exactly one SEARCH TIMEOUT counter and timer and cancels future")
+        void searchTimeoutRecordsTimeoutMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Search timed out"));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+
+            verify(mockFuture).cancel(true);
+
+            Counter timeoutCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .counter();
+            assertNotNull(timeoutCounter);
+            assertEquals(1.0, timeoutCounter.count());
+
+            Timer timeoutTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .timer();
+            assertNotNull(timeoutTimer);
+            assertEquals(1, timeoutTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Search interruption records exactly one SEARCH ERROR counter and timer and restores interrupt flag")
+        void searchInterruptionRecordsErrorMetricAndRestoresInterrupt() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException("Search interrupted"));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            try {
+                assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+                assertTrue(Thread.currentThread().isInterrupted(), "Thread interrupt flag must be restored");
+            } finally {
+                Thread.interrupted();
+            }
+
+            verify(mockFuture).cancel(true);
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("Search ExecutionException with DEADLINE_EXCEEDED records exactly one SEARCH TIMEOUT counter and timer")
+        void searchDeadlineExceededRecordsTimeoutMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new StatusException(Status.DEADLINE_EXCEEDED)));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+
+            Counter timeoutCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .counter();
+            assertNotNull(timeoutCounter);
+            assertEquals(1.0, timeoutCounter.count());
+
+            Timer timeoutTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "timeout")
+                    .timer();
+            assertNotNull(timeoutTimer);
+            assertEquals(1, timeoutTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "error").timer());
+        }
+
+        @Test
+        @DisplayName("Search ExecutionException with generic cause records exactly one SEARCH ERROR counter and timer")
+        void searchGenericExecutionExceptionRecordsErrorMetric() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new RuntimeException("Search failed in gRPC layer")));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").timer());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").timer());
+        }
+
+        @Test
+        @DisplayName("Search validation failures record zero metrics")
+        void searchValidationFailuresRecordZeroMetrics() {
+            assertThrows(IllegalArgumentException.class, () -> repository.search(null, 5));
+            assertThrows(IllegalArgumentException.class, () -> repository.search(Collections.emptyList(), 5));
+            assertThrows(IllegalArgumentException.class, () -> repository.search(sampleVector, 0));
+            assertThrows(IllegalArgumentException.class, () -> repository.search(sampleVector, -1));
+
+            List<Float> nanVector = new ArrayList<>(sampleVector);
+            nanVector.set(0, Float.NaN);
+            assertThrows(IllegalArgumentException.class, () -> repository.search(nanVector, 5));
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION).tag(CacheMetrics.TAG_OPERATION, "search").timer());
+        }
+
+        @Test
+        @DisplayName("Search mapping failure records exactly one SEARCH ERROR counter and timer")
+        void searchMappingFailureRecordsErrorMetric() throws Exception {
+            Points.ScoredPoint invalidPoint = Points.ScoredPoint.newBuilder()
+                    .setScore(0.85f)
+                    .build();
+            when(mockClient.searchAsync(any(Points.SearchPoints.class)))
+                    .thenReturn(Futures.immediateFuture(List.of(invalidPoint)));
+
+            assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
+        }
+
+        @Test
+        @DisplayName("Wrapped InterruptedException inside ExecutionException restores interrupt flag and records exactly one SEARCH ERROR counter and timer")
+        void searchWrappedInterruptedExceptionRestoresInterrupt() throws Exception {
+            @SuppressWarnings("unchecked")
+            ListenableFuture<List<Points.ScoredPoint>> mockFuture = mock(ListenableFuture.class);
+            when(mockFuture.get(anyLong(), any(TimeUnit.class)))
+                    .thenThrow(new ExecutionException(new InterruptedException("Wrapped interrupt")));
+            when(mockClient.searchAsync(any(Points.SearchPoints.class))).thenReturn(mockFuture);
+
+            try {
+                assertThrows(QdrantOperationException.class, () -> repository.search(sampleVector, 5));
+                assertTrue(Thread.currentThread().isInterrupted(), "Thread interrupt flag must be restored");
+            } finally {
+                Thread.interrupted();
+            }
+
+            Counter errorCounter = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .counter();
+            assertNotNull(errorCounter);
+            assertEquals(1.0, errorCounter.count());
+
+            Timer errorTimer = meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATION_DURATION)
+                    .tag(CacheMetrics.TAG_OPERATION, "search")
+                    .tag(CacheMetrics.TAG_STATUS, "error")
+                    .timer();
+            assertNotNull(errorTimer);
+            assertEquals(1, errorTimer.count());
+
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "success").counter());
+            assertNull(meterRegistry.find(CacheMetrics.METRIC_QDRANT_OPERATIONS).tag(CacheMetrics.TAG_OPERATION, "search").tag(CacheMetrics.TAG_STATUS, "timeout").counter());
         }
     }
 }

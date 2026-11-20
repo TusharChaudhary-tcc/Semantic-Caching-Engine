@@ -1,10 +1,15 @@
 package com.semanticcache.backend.repository;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.semanticcache.backend.config.QdrantConfig;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
 import com.semanticcache.backend.dto.VectorRecord;
 import com.semanticcache.backend.exception.QdrantOperationException;
+import com.semanticcache.backend.telemetry.CacheMetrics;
+import io.grpc.Status;
+import io.grpc.StatusException;
+import io.grpc.StatusRuntimeException;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.PointIdFactory;
 import io.qdrant.client.QdrantClient;
@@ -17,17 +22,22 @@ import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.google.common.util.concurrent.ListenableFuture;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -49,10 +59,17 @@ public class QdrantVectorRepository implements VectorRepository {
 
     private final QdrantClient qdrantClient;
     private final QdrantConfig qdrantConfig;
+    private final CacheMetrics cacheMetrics;
 
-    public QdrantVectorRepository(QdrantClient qdrantClient, QdrantConfig qdrantConfig) {
+    @Autowired
+    public QdrantVectorRepository(
+            QdrantClient qdrantClient,
+            QdrantConfig qdrantConfig,
+            CacheMetrics cacheMetrics
+    ) {
         this.qdrantClient = Objects.requireNonNull(qdrantClient, "qdrantClient must not be null");
         this.qdrantConfig = Objects.requireNonNull(qdrantConfig, "qdrantConfig must not be null");
+        this.cacheMetrics = Objects.requireNonNull(cacheMetrics, "cacheMetrics must not be null");
     }
 
     @Override
@@ -69,6 +86,7 @@ public class QdrantVectorRepository implements VectorRepository {
         String collectionName = qdrantConfig.getCollectionName();
         log.debug("Upserting vector record with ID [{}] into collection [{}]", record.id(), collectionName);
 
+        long startNanos = System.nanoTime();
         ListenableFuture<Points.UpdateResult> future = null;
         try {
             Points.PointStruct pointStruct = Points.PointStruct.newBuilder()
@@ -79,28 +97,54 @@ public class QdrantVectorRepository implements VectorRepository {
                     .putPayload(PAYLOAD_MODEL, ValueFactory.value(record.model()))
                     .putPayload(PAYLOAD_CREATED_AT, ValueFactory.value(record.createdAt().toString()))
                     .putPayload(PAYLOAD_EMBEDDING_MODEL, ValueFactory.value(record.embeddingModel()))
+                    .putPayload(PAYLOAD_VISIBILITY, ValueFactory.value(VISIBILITY_PUBLIC))
                     .build();
 
             future = qdrantClient.upsertAsync(collectionName, List.of(pointStruct));
             future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
+
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.UPSERT, CacheMetrics.OperationStatus.SUCCESS, duration);
             log.debug("Successfully upserted vector record with ID [{}] into collection [{}]", record.id(), collectionName);
         } catch (TimeoutException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.UPSERT, CacheMetrics.OperationStatus.TIMEOUT, duration);
             log.error("Timed out waiting for Qdrant upsert operation in collection [{}] after [{}] seconds",
                     collectionName, qdrantConfig.getTimeoutSeconds());
             throw new QdrantOperationException("Failed to upsert vector record in Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
             Thread.currentThread().interrupt();
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.UPSERT, CacheMetrics.OperationStatus.ERROR, duration);
             log.error("Thread interrupted while upserting vector record with ID [{}] into collection [{}]",
                     record.id(), collectionName);
             throw new QdrantOperationException("Failed to upsert vector record due to thread interruption", e);
         } catch (ExecutionException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.UPSERT, status, duration);
+
             log.error("Failed to upsert vector record with ID [{}] into collection [{}]: exception class [{}]",
                     record.id(), collectionName, e.getClass().getName());
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             throw new QdrantOperationException("Failed to upsert vector record in Qdrant", cause);
         } catch (Exception e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.UPSERT, status, duration);
+
             log.error("Failed to upsert vector record with ID [{}] into collection [{}]: exception class [{}]",
                     record.id(), collectionName, e.getClass().getName());
             throw new QdrantOperationException("Failed to upsert vector record in Qdrant", e);
@@ -114,6 +158,7 @@ public class QdrantVectorRepository implements VectorRepository {
         String collectionName = qdrantConfig.getCollectionName();
         log.debug("Retrieving vector record with ID [{}] from collection [{}]", id, collectionName);
 
+        long startNanos = System.nanoTime();
         ListenableFuture<List<Points.RetrievedPoint>> future = null;
         try {
             future = qdrantClient.retrieveAsync(
@@ -126,31 +171,66 @@ public class QdrantVectorRepository implements VectorRepository {
             List<Points.RetrievedPoint> points = future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
 
             if (points == null || points.isEmpty()) {
+                Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+                cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, CacheMetrics.OperationStatus.SUCCESS, duration);
                 log.debug("No vector record found for ID [{}] in collection [{}]", id, collectionName);
                 return Optional.empty();
             }
 
             Points.RetrievedPoint point = points.get(0);
-            return Optional.of(mapToVectorRecord(id, point));
+            VectorRecord record = mapToVectorRecord(id, point);
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, CacheMetrics.OperationStatus.SUCCESS, duration);
+            return Optional.of(record);
         } catch (QdrantOperationException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, status, duration);
             throw e;
         } catch (TimeoutException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, CacheMetrics.OperationStatus.TIMEOUT, duration);
             log.error("Timed out waiting for Qdrant retrieve operation for ID [{}] in collection [{}] after [{}] seconds",
                     id, collectionName, qdrantConfig.getTimeoutSeconds());
             throw new QdrantOperationException("Failed to retrieve vector record from Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
             Thread.currentThread().interrupt();
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, CacheMetrics.OperationStatus.ERROR, duration);
             log.error("Thread interrupted while retrieving vector record with ID [{}] from collection [{}]",
                     id, collectionName);
             throw new QdrantOperationException("Failed to retrieve vector record due to thread interruption", e);
         } catch (ExecutionException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, status, duration);
+
             log.error("Failed to retrieve vector record with ID [{}] from collection [{}]: exception class [{}]",
                     id, collectionName, e.getClass().getName());
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             throw new QdrantOperationException("Failed to retrieve vector record from Qdrant", cause);
         } catch (Exception e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.RETRIEVE, status, duration);
+
             log.error("Failed to retrieve vector record with ID [{}] from collection [{}]: exception class [{}]",
                     id, collectionName, e.getClass().getName());
             throw new QdrantOperationException("Failed to retrieve vector record from Qdrant", e);
@@ -202,6 +282,7 @@ public class QdrantVectorRepository implements VectorRepository {
         log.debug("Searching collection [{}] for top [{}] similar records (filter: [{}])",
                 collectionName, limit, qdrantFilter != null ? "applied" : "unrestricted");
 
+        long startNanos = System.nanoTime();
         ListenableFuture<List<Points.ScoredPoint>> future = null;
         try {
             Points.SearchPoints.Builder searchPointsBuilder = Points.SearchPoints.newBuilder()
@@ -219,6 +300,8 @@ public class QdrantVectorRepository implements VectorRepository {
             List<Points.ScoredPoint> scoredPoints = future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
 
             if (scoredPoints == null || scoredPoints.isEmpty()) {
+                Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+                cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, CacheMetrics.OperationStatus.SUCCESS, duration);
                 log.debug("No similar records found in collection [{}]", collectionName);
                 return Collections.emptyList();
             }
@@ -228,26 +311,58 @@ public class QdrantVectorRepository implements VectorRepository {
                 results.add(mapToSearchResult(scoredPoint));
             }
 
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, CacheMetrics.OperationStatus.SUCCESS, duration);
             log.debug("Found [{}] matching records in collection [{}]", results.size(), collectionName);
             return Collections.unmodifiableList(results);
         } catch (QdrantOperationException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, status, duration);
             throw e;
         } catch (TimeoutException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, CacheMetrics.OperationStatus.TIMEOUT, duration);
             log.error("Timed out waiting for Qdrant search operation in collection [{}] after [{}] seconds",
                     collectionName, qdrantConfig.getTimeoutSeconds());
             throw new QdrantOperationException("Failed to search vector records in Qdrant due to operation timeout", e);
         } catch (InterruptedException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cancelFuture(future);
             Thread.currentThread().interrupt();
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, CacheMetrics.OperationStatus.ERROR, duration);
             log.error("Thread interrupted while searching collection [{}]", collectionName);
             throw new QdrantOperationException("Failed to search vector records due to thread interruption", e);
         } catch (ExecutionException e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, status, duration);
+
             log.error("Failed to search vector records in collection [{}]: exception class [{}]",
                     collectionName, e.getClass().getName());
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             throw new QdrantOperationException("Failed to search vector records in Qdrant", cause);
         } catch (Exception e) {
+            Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+            if (hasInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+            }
+            CacheMetrics.OperationStatus status = isTimeout(e)
+                    ? CacheMetrics.OperationStatus.TIMEOUT
+                    : CacheMetrics.OperationStatus.ERROR;
+            cacheMetrics.recordQdrantOperation(CacheMetrics.QdrantOperation.SEARCH, status, duration);
+
             log.error("Failed to search vector records in collection [{}]: exception class [{}]",
                     collectionName, e.getClass().getName());
             throw new QdrantOperationException("Failed to search vector records in Qdrant", e);
@@ -427,5 +542,40 @@ public class QdrantVectorRepository implements VectorRepository {
         } catch (DateTimeParseException e) {
             throw new QdrantOperationException("Invalid createdAt timestamp in stored Qdrant payload", e);
         }
+    }
+
+    private boolean isTimeout(Throwable throwable) {
+        Throwable current = throwable;
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (current != null && visited.add(current)) {
+            if (current instanceof TimeoutException
+                    || current instanceof SocketTimeoutException
+                    || current instanceof HttpTimeoutException) {
+                return true;
+            }
+            if (current instanceof StatusRuntimeException sre) {
+                if (sre.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                    return true;
+                }
+            } else if (current instanceof StatusException se) {
+                if (se.getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean hasInterruptedException(Throwable throwable) {
+        Throwable current = throwable;
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (current != null && visited.add(current)) {
+            if (current instanceof InterruptedException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

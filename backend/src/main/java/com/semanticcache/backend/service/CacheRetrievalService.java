@@ -1,5 +1,6 @@
 package com.semanticcache.backend.service;
 
+import com.semanticcache.backend.dto.CacheRetrievalResult;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
 
@@ -27,4 +28,14 @@ public interface CacheRetrievalService {
      * @return an Optional containing the top candidate SearchResult, or empty if none found
      */
     Optional<SearchResult> findBestCandidate(String query, SearchFilter filter);
+
+    /**
+     * Retrieves the top semantically similar candidate along with the generated query vector
+     * using a trusted caller search filter.
+     *
+     * @param query the natural-language prompt
+     * @param filter trusted privacy and visibility filter
+     * @return CacheRetrievalResult containing optional top candidate and the query vector
+     */
+    CacheRetrievalResult findBestCandidateWithVector(String query, SearchFilter filter);
 }
