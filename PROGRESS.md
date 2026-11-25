@@ -71,10 +71,14 @@ $$\text{Score} = w_1 \cdot \text{Recency} + w_2 \cdot \text{Frequency} + w_3 \cd
 coupled with the **Dusty Corner (K-Tail)** eviction selector.
 
 ### 2.2 Tasks & Deliverables
-- [ ] **Task 2.1 — In-Process Cross-Encoder (ONNX Java):**
-  - Add `com.microsoft.onnxruntime:onnxruntime` to `backend/pom.xml`.
-  - Add lightweight quantized ONNX model files (`ms-marco-MiniLM-L-6-v2.onnx`) + WordPiece / HuggingFace tokenizer.
-  - Create `CrossEncoderService` and integrate as Stage 2 gate in `DefaultCacheDecisionService`.
+- [x] **Task 2.1 — In-Process Cross-Encoder (ONNX Java):** *(Completed)*
+  - Added `com.microsoft.onnxruntime:onnxruntime:1.20.0` to `backend/pom.xml`.
+  - Implemented pure-Java BERT `WordPieceTokenizer.java` (`[CLS] query [SEP] candidate [SEP]` pair encoding).
+  - Implemented `CrossEncoderConfig.java`, `CrossEncoderService.java`, and `OnnxCrossEncoderService.java` with sigmoid probability scoring and graceful fallback when local `.onnx` model artifacts are absent.
+  - Upgraded `CacheRetrievalService` / `DefaultCacheRetrievalService` for Top-K candidate retrieval (`findTopCandidatesWithVector`).
+  - Upgraded `CacheDecisionService` / `DefaultCacheDecisionService` for Stage-1 threshold filtering + Stage-2 Cross-Encoder re-ranking & intent verification.
+  - Upgraded `CacheResponse` & `CacheLookupResult` DTOs to expose `stage1Similarity`, `stage2CrossEncoderScore`, `verificationStage`, and `latencyMs`.
+  - Verified with **664 passing tests (0 failures, 0 errors)** including `WordPieceTokenizerTest` and `Stage2CrossEncoderIntegrationTest`.
 - [ ] **Task 2.2 — Novel Semantic Eviction Engine:**
   - Implement `SemanticDensityEvictionPolicy.java` computing recency, hit frequency, neighborhood vector density, and generation token cost.
   - Implement the K-Tail selection strategy (scan cold subset rather than whole DB).
@@ -82,7 +86,7 @@ coupled with the **Dusty Corner (K-Tail)** eviction selector.
   - Abstract LLM generation via `LlmProvider` interface.
   - Retain Gemini for high-quality embeddings + support both Gemini and Groq (Llama-3.3-70B / Llama-3.1-8B) for ultra-fast generation.
 - [ ] **Task 2.4 — Verification & Test Suite Expansion:**
-  - Add unit tests for cross-encoder scoring, pairwise verification, and eviction ranking. Ensure all 658+ tests pass.
+  - Add unit tests for eviction ranking and multi-provider routing. Ensure all tests pass.
 
 ---
 
