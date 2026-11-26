@@ -1,11 +1,13 @@
 package com.semanticcache.backend.service;
 
+import com.semanticcache.backend.config.CrossEncoderConfig;
 import com.semanticcache.backend.dto.CacheLookupResult;
 import com.semanticcache.backend.dto.CacheRequest;
 import com.semanticcache.backend.dto.CacheResponse;
 import com.semanticcache.backend.dto.CacheRetrievalResult;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
+import com.semanticcache.backend.dto.TopCandidatesResult;
 import com.semanticcache.backend.dto.VectorRecord;
 import com.semanticcache.backend.repository.VectorRepository;
 import com.semanticcache.backend.telemetry.CacheMetrics;
@@ -35,6 +37,10 @@ public class CacheService {
     private final CacheMetrics cacheMetrics;
     private final String geminiModel;
     private final String embeddingModel;
+    private final CrossEncoderService crossEncoderService;
+    private final CrossEncoderConfig crossEncoderConfig;
+    private final SemanticEvictionManager evictionManager;
+    private final LlmRouterService llmRouterService;
 
     @Autowired
     public CacheService(
@@ -44,7 +50,11 @@ public class CacheService {
             VectorRepository vectorRepository,
             CacheMetrics cacheMetrics,
             @Value("${gemini.model:gemini-3.8-flash}") String geminiModel,
-            @Value("${gemini.embedding-model:gemini-embedding-001}") String embeddingModel
+            @Value("${gemini.embedding-model:gemini-embedding-001}") String embeddingModel,
+            @Autowired(required = false) CrossEncoderService crossEncoderService,
+            @Autowired(required = false) CrossEncoderConfig crossEncoderConfig,
+            @Autowired(required = false) SemanticEvictionManager evictionManager,
+            @Autowired(required = false) LlmRouterService llmRouterService
     ) {
         this.cacheRetrievalService = Objects.requireNonNull(cacheRetrievalService, "cacheRetrievalService must not be null");
         this.cacheDecisionService = Objects.requireNonNull(cacheDecisionService, "cacheDecisionService must not be null");
@@ -53,6 +63,54 @@ public class CacheService {
         this.cacheMetrics = Objects.requireNonNull(cacheMetrics, "cacheMetrics must not be null");
         this.geminiModel = (geminiModel != null && !geminiModel.isBlank()) ? geminiModel.trim() : "gemini-3.8-flash";
         this.embeddingModel = (embeddingModel != null && !embeddingModel.isBlank()) ? embeddingModel.trim() : "gemini-embedding-001";
+        this.crossEncoderService = crossEncoderService;
+        this.crossEncoderConfig = crossEncoderConfig;
+        this.evictionManager = evictionManager;
+        this.llmRouterService = llmRouterService;
+    }
+
+    public CacheService(
+            CacheRetrievalService cacheRetrievalService,
+            CacheDecisionService cacheDecisionService,
+            GeminiProvider geminiProvider,
+            VectorRepository vectorRepository,
+            CacheMetrics cacheMetrics,
+            String geminiModel,
+            String embeddingModel,
+            CrossEncoderService crossEncoderService,
+            CrossEncoderConfig crossEncoderConfig,
+            SemanticEvictionManager evictionManager
+    ) {
+        this(cacheRetrievalService, cacheDecisionService, geminiProvider, vectorRepository, cacheMetrics,
+                geminiModel, embeddingModel, crossEncoderService, crossEncoderConfig, evictionManager, null);
+    }
+
+    public CacheService(
+            CacheRetrievalService cacheRetrievalService,
+            CacheDecisionService cacheDecisionService,
+            GeminiProvider geminiProvider,
+            VectorRepository vectorRepository,
+            CacheMetrics cacheMetrics,
+            String geminiModel,
+            String embeddingModel,
+            CrossEncoderService crossEncoderService,
+            CrossEncoderConfig crossEncoderConfig
+    ) {
+        this(cacheRetrievalService, cacheDecisionService, geminiProvider, vectorRepository, cacheMetrics,
+                geminiModel, embeddingModel, crossEncoderService, crossEncoderConfig, null, null);
+    }
+
+    public CacheService(
+            CacheRetrievalService cacheRetrievalService,
+            CacheDecisionService cacheDecisionService,
+            GeminiProvider geminiProvider,
+            VectorRepository vectorRepository,
+            CacheMetrics cacheMetrics,
+            String geminiModel,
+            String embeddingModel
+    ) {
+        this(cacheRetrievalService, cacheDecisionService, geminiProvider, vectorRepository, cacheMetrics,
+                geminiModel, embeddingModel, null, null, null, null);
     }
 
     public CacheService(
@@ -95,23 +153,39 @@ public class CacheService {
         SearchFilter anonymousFilter = SearchFilter.publicOnly();
         long startNanos = System.nanoTime();
 
-        Optional<SearchResult> candidate;
+        boolean useCrossEncoder = crossEncoderService != null
+                && crossEncoderService.isAvailable()
+                && (crossEncoderConfig == null || crossEncoderConfig.isEnabled());
+
+        boolean hasCandidate;
         List<Float> queryVector;
         CacheLookupResult decision;
         try {
-            log.debug("Initiating semantic cache retrieval for prompt with filter [{}]", anonymousFilter);
-            CacheRetrievalResult retrieval = cacheRetrievalService.findBestCandidateWithVector(prompt, anonymousFilter);
-            if (retrieval == null) {
-                throw new IllegalStateException("CacheRetrievalService returned an unexpected null CacheRetrievalResult");
+            log.debug("Initiating semantic cache retrieval for prompt with filter [{}] (crossEncoder={})",
+                    anonymousFilter, useCrossEncoder);
+            if (useCrossEncoder) {
+                int topK = crossEncoderConfig != null ? crossEncoderConfig.getTopK() : 3;
+                TopCandidatesResult retrieval = cacheRetrievalService.findTopCandidatesWithVector(prompt, topK, anonymousFilter);
+                if (retrieval == null) {
+                    throw new IllegalStateException("CacheRetrievalService returned an unexpected null TopCandidatesResult");
+                }
+                hasCandidate = retrieval.candidates() != null && !retrieval.candidates().isEmpty();
+                queryVector = retrieval.queryVector();
+                decision = cacheDecisionService.evaluateCandidates(prompt, retrieval.candidates(), anonymousFilter);
+            } else {
+                CacheRetrievalResult retrieval = cacheRetrievalService.findBestCandidateWithVector(prompt, anonymousFilter);
+                if (retrieval == null) {
+                    throw new IllegalStateException("CacheRetrievalService returned an unexpected null CacheRetrievalResult");
+                }
+                Optional<SearchResult> candidate = retrieval.candidate();
+                if (candidate == null) {
+                    throw new IllegalStateException("CacheRetrievalService returned an unexpected null candidate Optional");
+                }
+                hasCandidate = candidate.isPresent();
+                queryVector = retrieval.queryVector();
+                decision = cacheDecisionService.evaluate(candidate, anonymousFilter);
             }
-            candidate = retrieval.candidate();
-            queryVector = retrieval.queryVector();
 
-            if (candidate == null) {
-                throw new IllegalStateException("CacheRetrievalService returned an unexpected null candidate Optional");
-            }
-
-            decision = cacheDecisionService.evaluate(candidate, anonymousFilter);
             if (decision == null) {
                 throw new IllegalStateException("CacheDecisionService returned an unexpected null CacheLookupResult");
             }
@@ -128,29 +202,53 @@ public class CacheService {
                 throw new IllegalStateException("Inconsistent CacheLookupResult: isHit is true but matchedResult is empty");
             }
             SearchResult match = decision.matchedResult().get();
+            if (evictionManager != null) {
+                evictionManager.recordHit(match.id());
+            }
             Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cacheMetrics.recordSimilarityScore(decision.score(), CacheMetrics.CacheOutcome.HIT);
             cacheMetrics.recordCacheHit(match.visibility(), duration);
-            log.info("Semantic cache HIT for prompt with similarity score [{}]", decision.score());
-            return new CacheResponse(match.answer(), true);
+            String stage = decision.crossEncoderScore().isPresent() ? "CROSS_ENCODER_VERIFIED" : "VECTOR_SIMILARITY";
+            log.info("Semantic cache HIT [{}] for prompt (stage1={}, stage2={})",
+                    stage, decision.score(), decision.crossEncoderScore().orElse(null));
+            return new CacheResponse(
+                    match.answer(),
+                    true,
+                    decision.score(),
+                    decision.crossEncoderScore().orElse(null),
+                    stage,
+                    duration.toMillis(),
+                    "cache"
+            );
         }
 
-        if (candidate.isPresent()) {
+        if (hasCandidate) {
             cacheMetrics.recordSimilarityScore(decision.score(), CacheMetrics.CacheOutcome.MISS);
         }
 
         CacheMetrics.MissReason missReason = resolveMissReason(decision);
         cacheMetrics.recordCacheMiss(missReason);
 
-        log.info("Semantic cache MISS for prompt (reason: [{}]). Delegating to Gemini provider.", decision.reason());
+        LlmProvider activeProvider = llmRouterService != null
+                ? llmRouterService.resolve(request.provider())
+                : geminiProvider;
+
+        log.info("Semantic cache MISS for prompt (reason: [{}]). Delegating to [{}] provider.",
+                decision.reason(), activeProvider.getProviderName());
+        long llmStartNanos = System.nanoTime();
         String generatedAnswer;
         try {
-            generatedAnswer = geminiProvider.generateAnswer(prompt);
+            generatedAnswer = activeProvider.generateAnswer(prompt);
         } catch (Exception e) {
             Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
             cacheMetrics.recordCacheError(duration);
             throw e;
         }
+        long llmLatencyMs = Duration.ofNanos(System.nanoTime() - llmStartNanos).toMillis();
+
+        String resolvedModelName = (activeProvider.getModelName() != null && !"unknown".equals(activeProvider.getModelName()))
+                ? activeProvider.getModelName()
+                : geminiModel;
 
         if (vectorRepository != null && queryVector != null && !queryVector.isEmpty()) {
             try {
@@ -159,11 +257,16 @@ public class CacheService {
                         queryVector,
                         prompt,
                         generatedAnswer,
-                        geminiModel,
+                        resolvedModelName,
                         Instant.now(),
                         embeddingModel
                 );
                 vectorRepository.upsert(newRecord);
+                if (evictionManager != null) {
+                    int estimatedTokens = Math.max(1, (prompt.length() + generatedAnswer.length()) / 4);
+                    double clusterDensity = hasCandidate ? Math.max(0.0, Math.min(1.0, decision.score())) : 0.0;
+                    evictionManager.recordInsert(newRecord.id(), llmLatencyMs, estimatedTokens, clusterDensity);
+                }
                 log.debug("Successfully persisted newly generated response to semantic cache for prompt");
             } catch (Exception e) {
                 log.warn("Failed to persist entry to Qdrant vector repository: exception class [{}]", e.getClass().getName());
@@ -172,7 +275,16 @@ public class CacheService {
 
         Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
         cacheMetrics.recordCacheMissCompleted(duration);
-        return new CacheResponse(generatedAnswer, false);
+        String missStage = decision.crossEncoderScore().isPresent() ? "CROSS_ENCODER_REJECTED" : "LLM_GENERATED";
+        return new CacheResponse(
+                generatedAnswer,
+                false,
+                hasCandidate ? decision.score() : null,
+                decision.crossEncoderScore().orElse(null),
+                missStage,
+                duration.toMillis(),
+                activeProvider.getProviderName()
+        );
     }
 
     private CacheMetrics.MissReason resolveMissReason(CacheLookupResult decision) {
@@ -184,6 +296,7 @@ public class CacheService {
         String normalized = reason.trim().toUpperCase(Locale.ROOT);
         switch (normalized) {
             case "SCORE_BELOW_SIMILARITY_THRESHOLD":
+            case "SCORE_BELOW_CROSS_ENCODER_THRESHOLD":
                 return CacheMetrics.MissReason.BELOW_THRESHOLD;
             case "CANDIDATE_NOT_PUBLIC":
             case "OWNERSHIP_MISMATCH":

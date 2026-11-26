@@ -29,4 +29,10 @@ public interface VectorRepository {
      * @return non-increasing ranked list of matching SearchResults
      */
     List<SearchResult> search(List<Float> queryVector, int limit, SearchFilter filter);
+
+    /**
+     * Removes an evicted vector entry by its point ID.
+     */
+    default void deleteById(UUID id) {
+    }
 }

@@ -3,7 +3,9 @@ package com.semanticcache.backend.service;
 import com.semanticcache.backend.dto.CacheRetrievalResult;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
+import com.semanticcache.backend.dto.TopCandidatesResult;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -38,4 +40,14 @@ public interface CacheRetrievalService {
      * @return CacheRetrievalResult containing optional top candidate and the query vector
      */
     CacheRetrievalResult findBestCandidateWithVector(String query, SearchFilter filter);
+
+    /**
+     * Retrieves up to {@code limit} semantically similar candidates along with the generated query vector
+     * for Stage-2 cross-encoder re-ranking.
+     */
+    default TopCandidatesResult findTopCandidatesWithVector(String query, int limit, SearchFilter filter) {
+        CacheRetrievalResult single = findBestCandidateWithVector(query, filter);
+        List<SearchResult> list = single.candidate().map(List::of).orElse(List.of());
+        return new TopCandidatesResult(list, single.queryVector());
+    }
 }
