@@ -53,6 +53,13 @@
 			<version>1.20.0</version>
 		</dependency>
 
+		<!-- ONNX Runtime for In-Process Stage-2 Cross-Encoder Inference -->
+		<dependency>
+			<groupId>com.microsoft.onnxruntime</groupId>
+			<artifactId>onnxruntime</artifactId>
+			<version>1.20.0</version>
+		</dependency>
+
 		<!-- Micrometer Core (version managed by spring-boot-starter-parent) -->
 		<dependency>
 			<groupId>io.micrometer</groupId>

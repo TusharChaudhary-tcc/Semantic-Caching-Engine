@@ -4,6 +4,7 @@ import com.semanticcache.backend.dto.CacheRetrievalResult;
 import com.semanticcache.backend.dto.SearchFilter;
 import com.semanticcache.backend.dto.SearchResult;
 import com.semanticcache.backend.dto.SimilaritySearchResults;
+import com.semanticcache.backend.dto.TopCandidatesResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -69,5 +70,20 @@ public class DefaultCacheRetrievalService implements CacheRetrievalService {
                 log.debug("Found candidate with ID [{}] and score [{}]", best.id(), best.score()));
 
         return new CacheRetrievalResult(candidate, searchResults.queryVector());
+    }
+
+    @Override
+    public TopCandidatesResult findTopCandidatesWithVector(String query, int limit, SearchFilter filter) {
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("query must not be null or blank");
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be greater than zero");
+        }
+        Objects.requireNonNull(filter, "filter must not be null");
+
+        log.debug("Retrieving top [{}] cache candidates with vector and filter [{}]", limit, filter);
+        SimilaritySearchResults searchResults = similaritySearchService.searchWithVector(query.trim(), limit, filter);
+        return new TopCandidatesResult(searchResults.results(), searchResults.queryVector());
     }
 }

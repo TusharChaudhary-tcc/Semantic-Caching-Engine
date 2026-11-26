@@ -578,4 +578,23 @@ public class QdrantVectorRepository implements VectorRepository {
         }
         return false;
     }
+
+    @Override
+    public void deleteById(UUID id) {
+        Objects.requireNonNull(id, "id must not be null");
+        String collectionName = qdrantConfig.getCollectionName();
+        ListenableFuture<Points.UpdateResult> future = null;
+        try {
+            future = qdrantClient.deleteAsync(collectionName, List.of(PointIdFactory.id(id)));
+            future.get(qdrantConfig.getTimeoutSeconds(), TimeUnit.SECONDS);
+            log.debug("Deleted evicted vector [{}] from Qdrant collection [{}]", id, collectionName);
+        } catch (InterruptedException e) {
+            cancelFuture(future);
+            Thread.currentThread().interrupt();
+            throw new QdrantOperationException("Interrupted while deleting vector record from Qdrant", e);
+        } catch (Exception e) {
+            cancelFuture(future);
+            throw new QdrantOperationException("Failed to delete vector record from Qdrant", e);
+        }
+    }
 }

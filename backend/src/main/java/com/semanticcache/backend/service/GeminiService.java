@@ -92,6 +92,11 @@ public class GeminiService implements GeminiProvider {
         return model;
     }
 
+    @Override
+    public String getModelName() {
+        return model;
+    }
+
     private boolean isTimeout(Throwable throwable) {
         Throwable current = throwable;
         Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
