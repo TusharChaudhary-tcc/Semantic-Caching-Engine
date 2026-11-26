@@ -21,7 +21,7 @@
 | Phase | Title | Status | Core Objective |
 |---|---|---|---|
 | **Phase 1** | Enterprise Backend Core & Baseline Vector Cache | **COMPLETE (PASS)** | Production Java 21 / Spring Boot gateway, dual-token security, Qdrant integration, Gemini bi-encoder baseline, 658 automated tests. |
-| **Phase 2** | Two-Stage Cross-Encoder & Novel Eviction Engine | **IN PROGRESS** | In-process ONNX Stage-2 intent verifier, custom Semantic Density & Cost-Weighted eviction policy ($Score = w_1 R + w_2 F + w_3 D + C$), LMSYS benchmark pipeline. |
+| **Phase 2** | Two-Stage Cross-Encoder & Novel Eviction Engine | **COMPLETE (PASS)** | In-process ONNX Stage-2 intent verifier, custom Semantic Density & Cost-Weighted eviction policy ($Score = w_1 R + w_2 F + w_3 D + C$), Multi-LLM routing (Gemini + Groq). |
 | **Phase 3** | Research Benchmarking & Empirical Evaluation | **PENDING** | Offline simulation of 50K+ queries on Chatbot Arena dataset, LRU vs. LFU vs. Semantic Eviction comparison curves, latency delta and token cost charts for the paper. |
 | **Phase 4** | Frontend Dashboard Integration & Stampede Defense | **PENDING** | React UI connection, live visualizer for Stage 1 vs Stage 2 scores, request coalescing (anti-stampede), and AWS deployment packaging. |
 
@@ -57,7 +57,7 @@ Build a secure, enterprise-grade, high-throughput API gateway in **Java 21 / Spr
 
 ---
 
-## 🟡 PHASE 2: Two-Stage Cross-Encoder & Novel Eviction Engine (CURRENT PHASE)
+## 🟢 PHASE 2: Two-Stage Cross-Encoder & Novel Eviction Engine (COMPLETED)
 
 ### 2.1 Core Idea
 Solve the fundamental weakness of single-stage bi-encoder caches (false positives caused by syntactic similarity without intent alignment, e.g., *"How to reset password"* vs. *"What is password strength"*). 
@@ -79,14 +79,20 @@ coupled with the **Dusty Corner (K-Tail)** eviction selector.
   - Upgraded `CacheDecisionService` / `DefaultCacheDecisionService` for Stage-1 threshold filtering + Stage-2 Cross-Encoder re-ranking & intent verification.
   - Upgraded `CacheResponse` & `CacheLookupResult` DTOs to expose `stage1Similarity`, `stage2CrossEncoderScore`, `verificationStage`, and `latencyMs`.
   - Verified with **664 passing tests (0 failures, 0 errors)** including `WordPieceTokenizerTest` and `Stage2CrossEncoderIntegrationTest`.
-- [ ] **Task 2.2 — Novel Semantic Eviction Engine:**
-  - Implement `SemanticDensityEvictionPolicy.java` computing recency, hit frequency, neighborhood vector density, and generation token cost.
-  - Implement the K-Tail selection strategy (scan cold subset rather than whole DB).
-- [ ] **Task 2.3 — Multi-LLM Provider Support (Groq & Gemini):**
-  - Abstract LLM generation via `LlmProvider` interface.
-  - Retain Gemini for high-quality embeddings + support both Gemini and Groq (Llama-3.3-70B / Llama-3.1-8B) for ultra-fast generation.
-- [ ] **Task 2.4 — Verification & Test Suite Expansion:**
-  - Add unit tests for eviction ranking and multi-provider routing. Ensure all tests pass.
+- [x] **Task 2.2 — Novel Semantic Eviction Engine:** *(Completed)*
+  - Implemented `EvictionConfig.java`, `CacheEntryMetadata.java`, `EvictionPolicy.java`, and `SemanticDensityEvictionPolicy.java` ($Score = w_1 \cdot R + w_2 \cdot F + w_3 \cdot D + w_4 \cdot C$).
+  - Implemented `SemanticEvictionManager.java` using an access-order `LinkedHashMap` index and the **Dusty Corner (K-Tail)** selector ($O(K)$ bounded eviction).
+  - Added `deleteById(UUID)` to `VectorRepository.java` and `QdrantVectorRepository.java`.
+  - Wired hit tracking (`recordHit`) and miss insertion/eviction (`recordInsert` with LLM latency, estimated token cost, and cluster density) into `CacheService.java`.
+  - Added `SemanticEvictionTest.java` and verified full Maven test suite passes with **0 failures, 0 errors**.
+- [x] **Task 2.3 — Multi-LLM Provider Support (Groq & Gemini):** *(Completed)*
+  - Abstracted upstream LLM generation via `LlmProvider.java` (with `GeminiProvider` extending `LlmProvider`).
+  - Implemented `GroqConfig.java` and `GroqService.java` using Java 21 `HttpClient` against Groq's OpenAI-compatible Chat Completions endpoint (`llama-3.3-70b-versatile`).
+  - Implemented `LlmRouterService.java` supporting per-request `provider` selection (`"gemini"` / `"groq"`) with graceful fallback to Gemini if `GROQ_API_KEY` is absent.
+  - Updated `CacheRequest`, `CacheResponse` (exposing `provider`), `CacheService`, and `application.properties`.
+- [x] **Task 2.4 — Verification & Test Suite Expansion:** *(Completed)*
+  - Added `WordPieceTokenizerTest.java`, `Stage2CrossEncoderIntegrationTest.java`, `SemanticEvictionTest.java`, and `MultiLlmRouterTest.java`.
+  - Full Maven test suite (`.\mvnw.cmd test -q`) passed with **exit code 0 (0 failures, 0 errors)**.
 
 ---
 
