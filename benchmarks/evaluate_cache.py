@@ -23,7 +23,8 @@ import time
 import faiss
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
+
+faiss.omp_set_num_threads(1)
 
 BENCH_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BENCH_DIR.parent
@@ -61,6 +62,8 @@ def load_or_compute_embeddings(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray
             return data["unique_embeddings"].astype(np.float32), inverse_idx
 
     print(f"Encoding {len(unique_prompts):,} unique prompts with {BI_ENCODER_MODEL}...")
+    from sentence_transformers import SentenceTransformer
+
     model = SentenceTransformer(BI_ENCODER_MODEL)
     embs = model.encode(
         unique_prompts.tolist(),

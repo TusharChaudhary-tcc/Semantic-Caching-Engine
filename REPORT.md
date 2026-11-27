@@ -55,7 +55,18 @@ Traditional caches (like Redis) only remember **exact word-for-word matches**. I
 
 ---
 
-## 🔮 What Comes Next (Phase 3 & Phase 4)
+## 🟢 What We Proved in Phase 3 (Empirical Research Benchmarks)
 
-- **Phase 3 (Research Benchmarking):** Replay thousands of real conversations from `Knowledge/chatbot_arena_dataset.csv` to generate proof graphs comparing standard LRU vs. our Semantic Density Eviction algorithm, plus latency and cost savings for our research paper.
-- **Phase 4 (Live Frontend & Deployment):** Connect the React dashboard so you can see live Stage-1 vs. Stage-2 confidence scores, switch between Gemini and Groq in the UI, and deploy cleanly.
+**Goal of Phase 3:** Prove with real data (50,000 LMSYS Chatbot Arena conversations + 2,000 GLUE QQP paraphrase/hard-negative pairs) that our architecture saves tokens, cuts latency, and scales cleanly.
+
+**Key Empirical Findings:**
+- **Up to +34.9% More Tokens Saved vs. LRU:** On a 50,000-query replay (9.23M total tokens) at 500-entry capacity, our **Semantic Density & Cost-Weighted Eviction (`K=100`)** achieved a **14.05% hit rate** and saved **1,578,980 tokens** (compared to **12.13%** / **1,170,482 tokens** for LRU and **11.66%** / **1,119,153 tokens** for Exact Match). At 10,000-entry capacity, it reached **48.03% hit rate** (**4,443,145 tokens saved**).
+- **61x Speedup Over LLM Calls:** Live benchmarking confirmed **Two-Stage Cache Hits** complete in **23.46 ms median (26.70 ms p95)** — well under our 50 ms target — compared to **425.64 ms** (Groq Llama-3.3-70B) and **1,434.22 ms** (Gemini Flash).
+- **Intent Verification & Vector DB Tradeoffs:** Contrastive stress tests showed Stage-2 Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) assigns `0.0001` to keyword-trap false positives (*"reset password"* vs. *"password strength"*) and `0.9227+` to true paraphrases. Across 4 storage backends, HNSW vector indexing achieved **0.995–1.000 recall@3** while Exact HashMap (Redis) scored **0.0000** on paraphrased queries.
+- **Paper-Ready Artifacts:** Generated 5 publication-grade figures (`benchmarks/results/figures/fig1_*.png` .. `fig5_*.png`) and LaTeX result tables (`benchmarks/results/tables.tex`).
+
+---
+
+## 🔮 What Comes Next (Phase 4)
+
+- **Phase 4 (Live Frontend & Deployment):** Connect the React dashboard so you can see live Stage-1 vs. Stage-2 confidence scores, switch between Gemini and Groq in the UI, implement request coalescing (anti-stampede), and deploy cleanly with Docker Compose.

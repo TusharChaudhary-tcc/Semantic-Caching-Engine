@@ -1,0 +1,5 @@
+database,index_type,p50_ms,p95_ms,p99_ms,qps,recall_at_3
+Exact HashMap (Redis),Hash O(1),0.0005,0.001,0.0033,1025115.3,0.0
+FAISS Flat (Brute-Force),Exact Scan O(N),1.4618,2.2122,2.6908,638.4,1.0
+FAISS HNSW (In-Process),HNSW Graph,0.159,0.5748,0.6695,4637.4,0.9953
+Qdrant Vector DB,HNSW + Payload,35.5429,75.3827,90.7073,24.5,1.0

@@ -1,0 +1,801 @@
+path,latency_ms
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,27.44
+Groq LLM Miss (Llama-3.3-70B),445.9
+Gemini LLM Miss (Flash),1117.21
+Stage-1 Vector Hit,2.86
+Two-Stage Cache Hit,25.71
+Groq LLM Miss (Llama-3.3-70B),483.79
+Gemini LLM Miss (Flash),1750.98
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,27.03
+Groq LLM Miss (Llama-3.3-70B),254.16
+Gemini LLM Miss (Flash),1033.3
+Stage-1 Vector Hit,2.86
+Two-Stage Cache Hit,28.73
+Groq LLM Miss (Llama-3.3-70B),430.87
+Gemini LLM Miss (Flash),1348.8
+Stage-1 Vector Hit,2.97
+Two-Stage Cache Hit,29.21
+Groq LLM Miss (Llama-3.3-70B),418.57
+Gemini LLM Miss (Flash),1177.03
+Stage-1 Vector Hit,2.86
+Two-Stage Cache Hit,28.3
+Groq LLM Miss (Llama-3.3-70B),494.75
+Gemini LLM Miss (Flash),1698.89
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,25.88
+Groq LLM Miss (Llama-3.3-70B),425.61
+Gemini LLM Miss (Flash),1810.72
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,24.64
+Groq LLM Miss (Llama-3.3-70B),459.74
+Gemini LLM Miss (Flash),1175.03
+Stage-1 Vector Hit,2.74
+Two-Stage Cache Hit,25.92
+Groq LLM Miss (Llama-3.3-70B),451.34
+Gemini LLM Miss (Flash),1143.16
+Stage-1 Vector Hit,2.69
+Two-Stage Cache Hit,27.08
+Groq LLM Miss (Llama-3.3-70B),494.67
+Gemini LLM Miss (Flash),1434.02
+Stage-1 Vector Hit,2.86
+Two-Stage Cache Hit,25.12
+Groq LLM Miss (Llama-3.3-70B),404.29
+Gemini LLM Miss (Flash),1232.1
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,26.36
+Groq LLM Miss (Llama-3.3-70B),523.92
+Gemini LLM Miss (Flash),1400.55
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,25.54
+Groq LLM Miss (Llama-3.3-70B),383.59
+Gemini LLM Miss (Flash),1337.32
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,25.89
+Groq LLM Miss (Llama-3.3-70B),465.25
+Gemini LLM Miss (Flash),1566.94
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,25.93
+Groq LLM Miss (Llama-3.3-70B),455.08
+Gemini LLM Miss (Flash),1587.86
+Stage-1 Vector Hit,2.68
+Two-Stage Cache Hit,26.91
+Groq LLM Miss (Llama-3.3-70B),602.04
+Gemini LLM Miss (Flash),1319.95
+Stage-1 Vector Hit,2.68
+Two-Stage Cache Hit,26.29
+Groq LLM Miss (Llama-3.3-70B),376.46
+Gemini LLM Miss (Flash),1189.59
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,25.8
+Groq LLM Miss (Llama-3.3-70B),472.36
+Gemini LLM Miss (Flash),1811.27
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,24.24
+Groq LLM Miss (Llama-3.3-70B),410.31
+Gemini LLM Miss (Flash),1181.15
+Stage-1 Vector Hit,2.72
+Two-Stage Cache Hit,25.04
+Groq LLM Miss (Llama-3.3-70B),349.92
+Gemini LLM Miss (Flash),1658.19
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,26.57
+Groq LLM Miss (Llama-3.3-70B),483.18
+Gemini LLM Miss (Flash),1623.81
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,24.27
+Groq LLM Miss (Llama-3.3-70B),363.43
+Gemini LLM Miss (Flash),1524.29
+Stage-1 Vector Hit,2.68
+Two-Stage Cache Hit,24.28
+Groq LLM Miss (Llama-3.3-70B),429.92
+Gemini LLM Miss (Flash),1519.98
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,24.71
+Groq LLM Miss (Llama-3.3-70B),494.07
+Gemini LLM Miss (Flash),1521.55
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,24.88
+Groq LLM Miss (Llama-3.3-70B),477.71
+Gemini LLM Miss (Flash),1471.63
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,26.63
+Groq LLM Miss (Llama-3.3-70B),444.58
+Gemini LLM Miss (Flash),1652.01
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,26.34
+Groq LLM Miss (Llama-3.3-70B),296.14
+Gemini LLM Miss (Flash),1347.71
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.77
+Groq LLM Miss (Llama-3.3-70B),380.02
+Gemini LLM Miss (Flash),1245.56
+Stage-1 Vector Hit,2.97
+Two-Stage Cache Hit,25.84
+Groq LLM Miss (Llama-3.3-70B),396.61
+Gemini LLM Miss (Flash),1928.38
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,24.63
+Groq LLM Miss (Llama-3.3-70B),346.4
+Gemini LLM Miss (Flash),1759.85
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,23.71
+Groq LLM Miss (Llama-3.3-70B),276.96
+Gemini LLM Miss (Flash),1342.84
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,27.47
+Groq LLM Miss (Llama-3.3-70B),433.83
+Gemini LLM Miss (Flash),1637.59
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,24.22
+Groq LLM Miss (Llama-3.3-70B),480.45
+Gemini LLM Miss (Flash),1703.87
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.56
+Groq LLM Miss (Llama-3.3-70B),390.36
+Gemini LLM Miss (Flash),1302.05
+Stage-1 Vector Hit,2.84
+Two-Stage Cache Hit,25.33
+Groq LLM Miss (Llama-3.3-70B),492.93
+Gemini LLM Miss (Flash),1388.78
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,23.14
+Groq LLM Miss (Llama-3.3-70B),311.57
+Gemini LLM Miss (Flash),1087.35
+Stage-1 Vector Hit,2.69
+Two-Stage Cache Hit,24.49
+Groq LLM Miss (Llama-3.3-70B),341.85
+Gemini LLM Miss (Flash),1609.09
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,23.47
+Groq LLM Miss (Llama-3.3-70B),432.11
+Gemini LLM Miss (Flash),1670.96
+Stage-1 Vector Hit,2.89
+Two-Stage Cache Hit,24.23
+Groq LLM Miss (Llama-3.3-70B),383.68
+Gemini LLM Miss (Flash),1500.73
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,26.69
+Groq LLM Miss (Llama-3.3-70B),473.18
+Gemini LLM Miss (Flash),1351.01
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,25.67
+Groq LLM Miss (Llama-3.3-70B),458.83
+Gemini LLM Miss (Flash),1238.18
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,24.94
+Groq LLM Miss (Llama-3.3-70B),389.14
+Gemini LLM Miss (Flash),1327.84
+Stage-1 Vector Hit,2.87
+Two-Stage Cache Hit,26.0
+Groq LLM Miss (Llama-3.3-70B),318.35
+Gemini LLM Miss (Flash),1605.83
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,24.95
+Groq LLM Miss (Llama-3.3-70B),380.1
+Gemini LLM Miss (Flash),1454.0
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,23.5
+Groq LLM Miss (Llama-3.3-70B),460.86
+Gemini LLM Miss (Flash),1592.89
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,26.27
+Groq LLM Miss (Llama-3.3-70B),476.56
+Gemini LLM Miss (Flash),1418.48
+Stage-1 Vector Hit,2.73
+Two-Stage Cache Hit,23.36
+Groq LLM Miss (Llama-3.3-70B),384.02
+Gemini LLM Miss (Flash),1424.49
+Stage-1 Vector Hit,2.71
+Two-Stage Cache Hit,25.35
+Groq LLM Miss (Llama-3.3-70B),276.58
+Gemini LLM Miss (Flash),986.92
+Stage-1 Vector Hit,2.9
+Two-Stage Cache Hit,24.0
+Groq LLM Miss (Llama-3.3-70B),307.57
+Gemini LLM Miss (Flash),1130.88
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,24.96
+Groq LLM Miss (Llama-3.3-70B),453.98
+Gemini LLM Miss (Flash),1160.25
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,25.38
+Groq LLM Miss (Llama-3.3-70B),387.86
+Gemini LLM Miss (Flash),1865.75
+Stage-1 Vector Hit,2.68
+Two-Stage Cache Hit,24.42
+Groq LLM Miss (Llama-3.3-70B),389.72
+Gemini LLM Miss (Flash),1686.0
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,24.4
+Groq LLM Miss (Llama-3.3-70B),340.64
+Gemini LLM Miss (Flash),1384.26
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,26.32
+Groq LLM Miss (Llama-3.3-70B),339.25
+Gemini LLM Miss (Flash),1341.51
+Stage-1 Vector Hit,2.85
+Two-Stage Cache Hit,25.76
+Groq LLM Miss (Llama-3.3-70B),491.43
+Gemini LLM Miss (Flash),897.26
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,27.21
+Groq LLM Miss (Llama-3.3-70B),456.93
+Gemini LLM Miss (Flash),1526.08
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,26.49
+Groq LLM Miss (Llama-3.3-70B),369.5
+Gemini LLM Miss (Flash),987.26
+Stage-1 Vector Hit,2.84
+Two-Stage Cache Hit,23.29
+Groq LLM Miss (Llama-3.3-70B),426.13
+Gemini LLM Miss (Flash),1280.56
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.13
+Groq LLM Miss (Llama-3.3-70B),439.78
+Gemini LLM Miss (Flash),1456.99
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.19
+Groq LLM Miss (Llama-3.3-70B),556.15
+Gemini LLM Miss (Flash),1373.41
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,22.0
+Groq LLM Miss (Llama-3.3-70B),333.0
+Gemini LLM Miss (Flash),1507.37
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,22.01
+Groq LLM Miss (Llama-3.3-70B),438.7
+Gemini LLM Miss (Flash),1884.94
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,22.79
+Groq LLM Miss (Llama-3.3-70B),490.98
+Gemini LLM Miss (Flash),1564.2
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,24.13
+Groq LLM Miss (Llama-3.3-70B),544.38
+Gemini LLM Miss (Flash),1069.6
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,22.01
+Groq LLM Miss (Llama-3.3-70B),365.62
+Gemini LLM Miss (Flash),1153.5
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,24.18
+Groq LLM Miss (Llama-3.3-70B),386.87
+Gemini LLM Miss (Flash),1009.46
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,20.75
+Groq LLM Miss (Llama-3.3-70B),473.99
+Gemini LLM Miss (Flash),1378.89
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,19.94
+Groq LLM Miss (Llama-3.3-70B),294.98
+Gemini LLM Miss (Flash),1125.01
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,22.51
+Groq LLM Miss (Llama-3.3-70B),446.65
+Gemini LLM Miss (Flash),1718.2
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,20.71
+Groq LLM Miss (Llama-3.3-70B),589.72
+Gemini LLM Miss (Flash),2382.44
+Stage-1 Vector Hit,2.85
+Two-Stage Cache Hit,20.73
+Groq LLM Miss (Llama-3.3-70B),455.22
+Gemini LLM Miss (Flash),1133.35
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,20.51
+Groq LLM Miss (Llama-3.3-70B),238.78
+Gemini LLM Miss (Flash),1535.67
+Stage-1 Vector Hit,2.7
+Two-Stage Cache Hit,19.81
+Groq LLM Miss (Llama-3.3-70B),350.9
+Gemini LLM Miss (Flash),1317.09
+Stage-1 Vector Hit,2.62
+Two-Stage Cache Hit,24.06
+Groq LLM Miss (Llama-3.3-70B),367.97
+Gemini LLM Miss (Flash),1404.95
+Stage-1 Vector Hit,2.75
+Two-Stage Cache Hit,23.57
+Groq LLM Miss (Llama-3.3-70B),510.61
+Gemini LLM Miss (Flash),1500.26
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,24.01
+Groq LLM Miss (Llama-3.3-70B),406.52
+Gemini LLM Miss (Flash),1118.59
+Stage-1 Vector Hit,2.7
+Two-Stage Cache Hit,22.97
+Groq LLM Miss (Llama-3.3-70B),277.65
+Gemini LLM Miss (Flash),1294.38
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,25.46
+Groq LLM Miss (Llama-3.3-70B),415.43
+Gemini LLM Miss (Flash),2015.74
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,25.36
+Groq LLM Miss (Llama-3.3-70B),431.07
+Gemini LLM Miss (Flash),1764.48
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,23.59
+Groq LLM Miss (Llama-3.3-70B),377.56
+Gemini LLM Miss (Flash),1070.82
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.32
+Groq LLM Miss (Llama-3.3-70B),337.97
+Gemini LLM Miss (Flash),1217.93
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,23.93
+Groq LLM Miss (Llama-3.3-70B),600.92
+Gemini LLM Miss (Flash),1187.16
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,23.01
+Groq LLM Miss (Llama-3.3-70B),491.27
+Gemini LLM Miss (Flash),1161.06
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.59
+Groq LLM Miss (Llama-3.3-70B),499.18
+Gemini LLM Miss (Flash),1573.18
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,23.32
+Groq LLM Miss (Llama-3.3-70B),406.69
+Gemini LLM Miss (Flash),1436.96
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.53
+Groq LLM Miss (Llama-3.3-70B),364.34
+Gemini LLM Miss (Flash),1592.74
+Stage-1 Vector Hit,2.73
+Two-Stage Cache Hit,22.99
+Groq LLM Miss (Llama-3.3-70B),381.33
+Gemini LLM Miss (Flash),1057.81
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,24.83
+Groq LLM Miss (Llama-3.3-70B),311.38
+Gemini LLM Miss (Flash),1505.23
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,22.74
+Groq LLM Miss (Llama-3.3-70B),554.22
+Gemini LLM Miss (Flash),1501.2
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,24.1
+Groq LLM Miss (Llama-3.3-70B),409.92
+Gemini LLM Miss (Flash),1541.46
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,22.79
+Groq LLM Miss (Llama-3.3-70B),531.01
+Gemini LLM Miss (Flash),1520.2
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,24.3
+Groq LLM Miss (Llama-3.3-70B),385.07
+Gemini LLM Miss (Flash),1804.01
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,23.2
+Groq LLM Miss (Llama-3.3-70B),456.44
+Gemini LLM Miss (Flash),1941.44
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,22.85
+Groq LLM Miss (Llama-3.3-70B),435.57
+Gemini LLM Miss (Flash),1058.17
+Stage-1 Vector Hit,2.84
+Two-Stage Cache Hit,23.32
+Groq LLM Miss (Llama-3.3-70B),303.71
+Gemini LLM Miss (Flash),1978.3
+Stage-1 Vector Hit,2.74
+Two-Stage Cache Hit,24.25
+Groq LLM Miss (Llama-3.3-70B),566.51
+Gemini LLM Miss (Flash),1392.55
+Stage-1 Vector Hit,2.94
+Two-Stage Cache Hit,23.96
+Groq LLM Miss (Llama-3.3-70B),387.43
+Gemini LLM Miss (Flash),1917.66
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,23.98
+Groq LLM Miss (Llama-3.3-70B),325.9
+Gemini LLM Miss (Flash),1163.69
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,24.16
+Groq LLM Miss (Llama-3.3-70B),474.68
+Gemini LLM Miss (Flash),1323.73
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,21.78
+Groq LLM Miss (Llama-3.3-70B),419.56
+Gemini LLM Miss (Flash),1397.7
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.05
+Groq LLM Miss (Llama-3.3-70B),448.69
+Gemini LLM Miss (Flash),1900.39
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,23.49
+Groq LLM Miss (Llama-3.3-70B),427.7
+Gemini LLM Miss (Flash),1656.06
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,23.68
+Groq LLM Miss (Llama-3.3-70B),245.74
+Gemini LLM Miss (Flash),1434.41
+Stage-1 Vector Hit,2.92
+Two-Stage Cache Hit,21.94
+Groq LLM Miss (Llama-3.3-70B),348.33
+Gemini LLM Miss (Flash),1059.98
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,22.94
+Groq LLM Miss (Llama-3.3-70B),345.36
+Gemini LLM Miss (Flash),1343.08
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,24.18
+Groq LLM Miss (Llama-3.3-70B),497.85
+Gemini LLM Miss (Flash),1025.55
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.01
+Groq LLM Miss (Llama-3.3-70B),422.6
+Gemini LLM Miss (Flash),1295.07
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,23.34
+Groq LLM Miss (Llama-3.3-70B),392.15
+Gemini LLM Miss (Flash),1770.88
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,23.28
+Groq LLM Miss (Llama-3.3-70B),465.74
+Gemini LLM Miss (Flash),1877.97
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,23.32
+Groq LLM Miss (Llama-3.3-70B),406.87
+Gemini LLM Miss (Flash),1227.3
+Stage-1 Vector Hit,2.85
+Two-Stage Cache Hit,23.96
+Groq LLM Miss (Llama-3.3-70B),400.97
+Gemini LLM Miss (Flash),1527.6
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,23.1
+Groq LLM Miss (Llama-3.3-70B),435.01
+Gemini LLM Miss (Flash),1103.0
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.56
+Groq LLM Miss (Llama-3.3-70B),427.69
+Gemini LLM Miss (Flash),1523.03
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,25.39
+Groq LLM Miss (Llama-3.3-70B),633.99
+Gemini LLM Miss (Flash),2050.59
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,23.99
+Groq LLM Miss (Llama-3.3-70B),347.47
+Gemini LLM Miss (Flash),1358.04
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,23.2
+Groq LLM Miss (Llama-3.3-70B),295.61
+Gemini LLM Miss (Flash),1260.97
+Stage-1 Vector Hit,2.62
+Two-Stage Cache Hit,23.8
+Groq LLM Miss (Llama-3.3-70B),446.83
+Gemini LLM Miss (Flash),1835.87
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.48
+Groq LLM Miss (Llama-3.3-70B),358.03
+Gemini LLM Miss (Flash),1240.67
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,23.83
+Groq LLM Miss (Llama-3.3-70B),237.48
+Gemini LLM Miss (Flash),1397.95
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,22.57
+Groq LLM Miss (Llama-3.3-70B),329.69
+Gemini LLM Miss (Flash),1280.58
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,24.4
+Groq LLM Miss (Llama-3.3-70B),345.47
+Gemini LLM Miss (Flash),1419.84
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,24.25
+Groq LLM Miss (Llama-3.3-70B),270.59
+Gemini LLM Miss (Flash),980.55
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,22.88
+Groq LLM Miss (Llama-3.3-70B),600.99
+Gemini LLM Miss (Flash),1038.02
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,22.8
+Groq LLM Miss (Llama-3.3-70B),326.77
+Gemini LLM Miss (Flash),2037.81
+Stage-1 Vector Hit,2.75
+Two-Stage Cache Hit,22.75
+Groq LLM Miss (Llama-3.3-70B),666.93
+Gemini LLM Miss (Flash),1075.1
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,23.74
+Groq LLM Miss (Llama-3.3-70B),388.7
+Gemini LLM Miss (Flash),1559.3
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,23.85
+Groq LLM Miss (Llama-3.3-70B),566.94
+Gemini LLM Miss (Flash),1134.21
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,21.65
+Groq LLM Miss (Llama-3.3-70B),399.15
+Gemini LLM Miss (Flash),1698.75
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,23.28
+Groq LLM Miss (Llama-3.3-70B),456.96
+Gemini LLM Miss (Flash),1329.63
+Stage-1 Vector Hit,2.82
+Two-Stage Cache Hit,23.64
+Groq LLM Miss (Llama-3.3-70B),408.63
+Gemini LLM Miss (Flash),1010.03
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,24.22
+Groq LLM Miss (Llama-3.3-70B),399.76
+Gemini LLM Miss (Flash),1364.76
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.03
+Groq LLM Miss (Llama-3.3-70B),439.73
+Gemini LLM Miss (Flash),1272.3
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,24.25
+Groq LLM Miss (Llama-3.3-70B),460.08
+Gemini LLM Miss (Flash),1774.07
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,23.7
+Groq LLM Miss (Llama-3.3-70B),433.21
+Gemini LLM Miss (Flash),1562.56
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,22.29
+Groq LLM Miss (Llama-3.3-70B),424.52
+Gemini LLM Miss (Flash),1450.03
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.83
+Groq LLM Miss (Llama-3.3-70B),358.67
+Gemini LLM Miss (Flash),1551.28
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,23.47
+Groq LLM Miss (Llama-3.3-70B),411.73
+Gemini LLM Miss (Flash),2119.81
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.22
+Groq LLM Miss (Llama-3.3-70B),553.74
+Gemini LLM Miss (Flash),1573.47
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.61
+Groq LLM Miss (Llama-3.3-70B),355.14
+Gemini LLM Miss (Flash),1094.03
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,22.62
+Groq LLM Miss (Llama-3.3-70B),521.25
+Gemini LLM Miss (Flash),1534.08
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,22.24
+Groq LLM Miss (Llama-3.3-70B),460.81
+Gemini LLM Miss (Flash),891.73
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,22.06
+Groq LLM Miss (Llama-3.3-70B),498.83
+Gemini LLM Miss (Flash),1595.41
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,20.78
+Groq LLM Miss (Llama-3.3-70B),325.61
+Gemini LLM Miss (Flash),1299.11
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,22.01
+Groq LLM Miss (Llama-3.3-70B),442.42
+Gemini LLM Miss (Flash),1466.79
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,21.71
+Groq LLM Miss (Llama-3.3-70B),395.17
+Gemini LLM Miss (Flash),1416.88
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,22.39
+Groq LLM Miss (Llama-3.3-70B),398.58
+Gemini LLM Miss (Flash),1498.82
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,22.06
+Groq LLM Miss (Llama-3.3-70B),545.08
+Gemini LLM Miss (Flash),628.67
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.41
+Groq LLM Miss (Llama-3.3-70B),399.87
+Gemini LLM Miss (Flash),1506.48
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,23.41
+Groq LLM Miss (Llama-3.3-70B),445.16
+Gemini LLM Miss (Flash),1330.99
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,20.95
+Groq LLM Miss (Llama-3.3-70B),270.68
+Gemini LLM Miss (Flash),1554.96
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,22.59
+Groq LLM Miss (Llama-3.3-70B),566.82
+Gemini LLM Miss (Flash),959.16
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,20.62
+Groq LLM Miss (Llama-3.3-70B),493.43
+Gemini LLM Miss (Flash),1344.87
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,20.95
+Groq LLM Miss (Llama-3.3-70B),414.79
+Gemini LLM Miss (Flash),1113.07
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,19.71
+Groq LLM Miss (Llama-3.3-70B),391.57
+Gemini LLM Miss (Flash),1866.01
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,20.13
+Groq LLM Miss (Llama-3.3-70B),469.53
+Gemini LLM Miss (Flash),2004.34
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,19.62
+Groq LLM Miss (Llama-3.3-70B),520.08
+Gemini LLM Miss (Flash),1590.51
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,20.82
+Groq LLM Miss (Llama-3.3-70B),568.23
+Gemini LLM Miss (Flash),1590.48
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,22.36
+Groq LLM Miss (Llama-3.3-70B),490.38
+Gemini LLM Miss (Flash),1355.1
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,21.11
+Groq LLM Miss (Llama-3.3-70B),425.66
+Gemini LLM Miss (Flash),1226.82
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,22.13
+Groq LLM Miss (Llama-3.3-70B),504.11
+Gemini LLM Miss (Flash),1072.94
+Stage-1 Vector Hit,2.75
+Two-Stage Cache Hit,22.37
+Groq LLM Miss (Llama-3.3-70B),486.5
+Gemini LLM Miss (Flash),1388.99
+Stage-1 Vector Hit,2.79
+Two-Stage Cache Hit,21.06
+Groq LLM Miss (Llama-3.3-70B),519.56
+Gemini LLM Miss (Flash),1690.28
+Stage-1 Vector Hit,2.81
+Two-Stage Cache Hit,21.78
+Groq LLM Miss (Llama-3.3-70B),574.75
+Gemini LLM Miss (Flash),1683.85
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,19.72
+Groq LLM Miss (Llama-3.3-70B),286.38
+Gemini LLM Miss (Flash),1428.57
+Stage-1 Vector Hit,2.63
+Two-Stage Cache Hit,20.22
+Groq LLM Miss (Llama-3.3-70B),320.38
+Gemini LLM Miss (Flash),1284.15
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,21.77
+Groq LLM Miss (Llama-3.3-70B),548.45
+Gemini LLM Miss (Flash),1654.01
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,24.22
+Groq LLM Miss (Llama-3.3-70B),360.59
+Gemini LLM Miss (Flash),1125.61
+Stage-1 Vector Hit,2.74
+Two-Stage Cache Hit,20.85
+Groq LLM Miss (Llama-3.3-70B),422.79
+Gemini LLM Miss (Flash),1060.7
+Stage-1 Vector Hit,2.68
+Two-Stage Cache Hit,22.21
+Groq LLM Miss (Llama-3.3-70B),362.95
+Gemini LLM Miss (Flash),1549.84
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,20.77
+Groq LLM Miss (Llama-3.3-70B),518.2
+Gemini LLM Miss (Flash),1644.8
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,23.37
+Groq LLM Miss (Llama-3.3-70B),225.24
+Gemini LLM Miss (Flash),1547.4
+Stage-1 Vector Hit,2.77
+Two-Stage Cache Hit,21.02
+Groq LLM Miss (Llama-3.3-70B),426.12
+Gemini LLM Miss (Flash),1582.44
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,22.48
+Groq LLM Miss (Llama-3.3-70B),557.38
+Gemini LLM Miss (Flash),789.76
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,23.81
+Groq LLM Miss (Llama-3.3-70B),369.76
+Gemini LLM Miss (Flash),1639.09
+Stage-1 Vector Hit,2.75
+Two-Stage Cache Hit,23.55
+Groq LLM Miss (Llama-3.3-70B),285.56
+Gemini LLM Miss (Flash),1922.3
+Stage-1 Vector Hit,2.75
+Two-Stage Cache Hit,22.19
+Groq LLM Miss (Llama-3.3-70B),451.31
+Gemini LLM Miss (Flash),1720.91
+Stage-1 Vector Hit,2.85
+Two-Stage Cache Hit,23.44
+Groq LLM Miss (Llama-3.3-70B),371.47
+Gemini LLM Miss (Flash),1710.4
+Stage-1 Vector Hit,2.78
+Two-Stage Cache Hit,21.73
+Groq LLM Miss (Llama-3.3-70B),510.82
+Gemini LLM Miss (Flash),1524.52
+Stage-1 Vector Hit,2.86
+Two-Stage Cache Hit,21.8
+Groq LLM Miss (Llama-3.3-70B),439.92
+Gemini LLM Miss (Flash),1536.51
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,20.61
+Groq LLM Miss (Llama-3.3-70B),346.62
+Gemini LLM Miss (Flash),1402.79
+Stage-1 Vector Hit,2.67
+Two-Stage Cache Hit,20.49
+Groq LLM Miss (Llama-3.3-70B),407.04
+Gemini LLM Miss (Flash),1572.69
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,22.57
+Groq LLM Miss (Llama-3.3-70B),504.99
+Gemini LLM Miss (Flash),1111.27
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,23.93
+Groq LLM Miss (Llama-3.3-70B),409.37
+Gemini LLM Miss (Flash),1924.07
+Stage-1 Vector Hit,2.89
+Two-Stage Cache Hit,29.34
+Groq LLM Miss (Llama-3.3-70B),356.8
+Gemini LLM Miss (Flash),1186.88
+Stage-1 Vector Hit,2.73
+Two-Stage Cache Hit,20.97
+Groq LLM Miss (Llama-3.3-70B),437.2
+Gemini LLM Miss (Flash),1720.2
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,21.27
+Groq LLM Miss (Llama-3.3-70B),420.97
+Gemini LLM Miss (Flash),1875.27
+Stage-1 Vector Hit,2.64
+Two-Stage Cache Hit,22.0
+Groq LLM Miss (Llama-3.3-70B),492.83
+Gemini LLM Miss (Flash),1719.38
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,21.24
+Groq LLM Miss (Llama-3.3-70B),467.1
+Gemini LLM Miss (Flash),2194.85
+Stage-1 Vector Hit,2.8
+Two-Stage Cache Hit,20.84
+Groq LLM Miss (Llama-3.3-70B),402.56
+Gemini LLM Miss (Flash),808.87
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,20.54
+Groq LLM Miss (Llama-3.3-70B),556.36
+Gemini LLM Miss (Flash),1303.54
+Stage-1 Vector Hit,2.76
+Two-Stage Cache Hit,20.52
+Groq LLM Miss (Llama-3.3-70B),429.17
+Gemini LLM Miss (Flash),1869.06
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,20.24
+Groq LLM Miss (Llama-3.3-70B),283.81
+Gemini LLM Miss (Flash),1049.47
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,22.25
+Groq LLM Miss (Llama-3.3-70B),283.89
+Gemini LLM Miss (Flash),1195.88
+Stage-1 Vector Hit,2.93
+Two-Stage Cache Hit,23.72
+Groq LLM Miss (Llama-3.3-70B),457.37
+Gemini LLM Miss (Flash),1617.74
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,21.8
+Groq LLM Miss (Llama-3.3-70B),443.48
+Gemini LLM Miss (Flash),997.91
+Stage-1 Vector Hit,2.66
+Two-Stage Cache Hit,23.44
+Groq LLM Miss (Llama-3.3-70B),223.64
+Gemini LLM Miss (Flash),1467.39
+Stage-1 Vector Hit,2.84
+Two-Stage Cache Hit,21.51
+Groq LLM Miss (Llama-3.3-70B),379.9
+Gemini LLM Miss (Flash),1597.0
+Stage-1 Vector Hit,2.65
+Two-Stage Cache Hit,23.02
+Groq LLM Miss (Llama-3.3-70B),479.67
+Gemini LLM Miss (Flash),1494.24
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,22.55
+Groq LLM Miss (Llama-3.3-70B),484.61
+Gemini LLM Miss (Flash),1523.35
+Stage-1 Vector Hit,2.83
+Two-Stage Cache Hit,22.65
+Groq LLM Miss (Llama-3.3-70B),465.06
+Gemini LLM Miss (Flash),1224.5
