@@ -1,0 +1,6 @@
+capacity,policy,total_queries,cache_hits,hit_rate_pct,tokens_saved,total_tokens,token_savings_pct,cost_saved_usd,avg_latency_saved_ms,sim_runtime_sec,config_name
+1000,semantic_density,50000,9491,18.98,1942841,9226735,21.06,0.5829,649.5,12.67,"Balanced (w=[0.30,0.25,0.25,0.20], K=100)"
+1000,semantic_density,50000,9151,18.3,1792780,9226735,19.43,0.5378,602.9,6.84,K-Tail Small (K=25)
+1000,semantic_density,50000,9645,19.29,2099254,9226735,22.75,0.6298,696.1,73.01,K-Tail Large (K=250)
+1000,semantic_density,50000,9155,18.31,1909140,9226735,20.69,0.5727,632.6,13.94,"Cost-Heavy (w=[0.20,0.20,0.20,0.40], K=100)"
+1000,semantic_density,50000,9220,18.44,1881265,9226735,20.39,0.5644,628.9,12.72,"Density-Heavy (w=[0.20,0.20,0.40,0.20], K=100)"

@@ -1,0 +1,51 @@
+{
+  "dataset": "GLUE QQP (1000 positives, 1000 high-lexical-overlap negatives)",
+  "bi_encoder_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "stage1_roc_auc": 0.5903,
+  "stage2_roc_auc": 0.3866,
+  "stress_test_cases": [
+    {
+      "query_a": "How do I reset my password?",
+      "query_b": "I forgot my password, how can I reset it?",
+      "true_intent_match": 1,
+      "stage1_cosine": 0.9368,
+      "stage2_cross_encoder": 0.9227
+    },
+    {
+      "query_a": "How do I reset my password?",
+      "query_b": "What is a good password strength?",
+      "true_intent_match": 0,
+      "stage1_cosine": 0.3771,
+      "stage2_cross_encoder": 0.0001
+    },
+    {
+      "query_a": "How to sort a list in Python?",
+      "query_b": "What is the syntax to sort a Python array?",
+      "true_intent_match": 1,
+      "stage1_cosine": 0.75,
+      "stage2_cross_encoder": 0.5653
+    },
+    {
+      "query_a": "How to sort a list in Python?",
+      "query_b": "How to reverse a list in Python?",
+      "true_intent_match": 0,
+      "stage1_cosine": 0.5547,
+      "stage2_cross_encoder": 0.8083
+    },
+    {
+      "query_a": "Explain Docker vs Kubernetes",
+      "query_b": "What is the difference between Docker and Kubernetes?",
+      "true_intent_match": 1,
+      "stage1_cosine": 0.9487,
+      "stage2_cross_encoder": 0.975
+    },
+    {
+      "query_a": "Explain Docker vs Kubernetes",
+      "query_b": "How do I install Docker on Ubuntu?",
+      "true_intent_match": 0,
+      "stage1_cosine": 0.4765,
+      "stage2_cross_encoder": 0.0001
+    }
+  ]
+}

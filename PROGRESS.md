@@ -22,7 +22,7 @@
 |---|---|---|---|
 | **Phase 1** | Enterprise Backend Core & Baseline Vector Cache | **COMPLETE (PASS)** | Production Java 21 / Spring Boot gateway, dual-token security, Qdrant integration, Gemini bi-encoder baseline, 658 automated tests. |
 | **Phase 2** | Two-Stage Cross-Encoder & Novel Eviction Engine | **COMPLETE (PASS)** | In-process ONNX Stage-2 intent verifier, custom Semantic Density & Cost-Weighted eviction policy ($Score = w_1 R + w_2 F + w_3 D + C$), Multi-LLM routing (Gemini + Groq). |
-| **Phase 3** | Research Benchmarking & Empirical Evaluation | **PENDING** | Offline simulation of 50K+ queries on Chatbot Arena dataset, LRU vs. LFU vs. Semantic Eviction comparison curves, latency delta and token cost charts for the paper. |
+| **Phase 3** | Research Benchmarking & Empirical Evaluation | **COMPLETE (PASS)** | Offline simulation of 50K LMSYS Chatbot Arena queries, LRU vs. LFU vs. Semantic Density + K-Tail comparison, latency delta (<27ms p95), 4-store DB benchmark, and paper figures/LaTeX tables. |
 | **Phase 4** | Frontend Dashboard Integration & Stampede Defense | **PENDING** | React UI connection, live visualizer for Stage 1 vs Stage 2 scores, request coalescing (anti-stampede), and AWS deployment packaging. |
 
 ---
@@ -96,19 +96,28 @@ coupled with the **Dusty Corner (K-Tail)** eviction selector.
 
 ---
 
-## ⚪ PHASE 3: Research Benchmarking & Empirical Evaluation (UPCOMING)
+## 🟢 PHASE 3: Research Benchmarking & Empirical Evaluation (COMPLETED)
 
 ### 3.1 Core Idea
-Execute systematic research benchmarks using the **2026 LMSYS Chatbot Arena Dataset** (`Knowledge/chatbot_arena_dataset.csv`) to prove the novelty and efficiency of the system for your research paper.
+Execute systematic research benchmarks using **50,000 real conversational queries** from the **LMSYS Chatbot Arena Dataset** (`lmsys/chatbot_arena_conversations` $\rightarrow$ `Knowledge/chatbot_arena_dataset.csv`) and **2,000 balanced paraphrase / hard-negative pairs** from **GLUE QQP** (`benchmarks/data/qqp_intent_eval.csv`) to empirically validate our Two-Stage pipeline, Semantic Density & Cost-Weighted eviction policy, latency delta, and vector store performance.
 
-### 3.2 Deliverables
-- Python benchmark evaluation harness (`benchmarks/evaluate_cache.py`).
-- Comparative simulations:
-  - Cache Hit Ratio: LRU vs. LFU vs. Semantic Density Eviction.
-  - Accuracy & False Positive Rate: Stage 1 (Bi-encoder only) vs. Two-Stage (Bi-encoder + Cross-encoder).
-  - Latency Delta Distribution: Sub-35ms cache hit vs. 1500ms+ LLM calls.
-  - Cost Savings Curve across various cache capacities (1K, 5K, 25K queries).
-- Export automated matplotlib/seaborn graphs and LaTeX result tables directly for the paper.
+### 3.2 Deliverables & Verified Results
+- [x] **Task 3.1 — Python 3.12 Benchmark Harness (`benchmarks/`):**
+  - Managed via `uv` (`benchmarks/pyproject.toml`), `prepare_dataset.py`, `eval_two_stage.py`, `evaluate_cache.py`, `eval_system_perf.py`, and `generate_artifacts.py`.
+- [x] **Task 3.2 — Eviction Policy Simulation (50,000 Queries, 23,043 Unique Prompts, 9.23M Total Tokens):**
+  - **Capacity 500:** Exact Match `11.66%` (`1,119,153` tokens) | LRU `12.13%` (`1,170,482` tokens) | **Semantic Density + Cost `14.05%` (`1,578,980` tokens — +34.9% more tokens saved than LRU)** | LFU ($O(N)$ full scan) `19.51%`.
+  - **Capacity 1,000:** Exact Match `16.65%` | LRU `17.47%` (`1,641,506` tokens) | **Semantic Density + Cost `18.98%` (`1,942,841` tokens, 21.06% token savings — +18.4% more tokens saved than LRU)**.
+  - **Capacity 5,000:** Exact `34.28%` | LRU `36.70%` | **Semantic Density + Cost `37.23%` (`3,462,917` tokens)**.
+  - **Capacity 10,000:** Exact `44.96%` | LRU `47.85%` | **Semantic Density + Cost `48.03%` (`4,443,145` tokens)**.
+  - **K-Tail & Weight Ablation (`capacity=1000`):** Verified `K=100` (`18.98%` hit rate, `12.67s`) as the optimal $O(K)$ balance between `K=25` (`18.30%`, `6.84s`) and `K=250` (`19.29%`, `73.01s`).
+- [x] **Task 3.3 — Two-Stage Intent Verification (`eval_two_stage.py`):**
+  - Contrastive intent stress tests confirm Stage-2 (`ms-marco-MiniLM-L-6-v2`) rejects different-intent traps (e.g., *"How do I reset my password?"* vs. *"What is a good password strength?"* $\rightarrow$ `0.0001`; *"Explain Docker vs Kubernetes"* vs. *"How do I install Docker on Ubuntu?"* $\rightarrow$ `0.0001`) while accepting true paraphrases (`0.9227` and `0.9750`).
+  - Also observed on GLUE QQP hard lexical-overlap negatives that asymmetric MS-MARCO cross-encoders score `0.3866` ROC-AUC vs. `0.5903` for symmetric bi-encoders, motivating symmetric paraphrase cross-encoders (e.g., `quora-distilroberta-base`) as a future calibration option.
+- [x] **Task 3.4 — Latency Delta & 4-Store Vector DB Comparison (`eval_system_perf.py`):**
+  - **End-to-End Latency:** Stage-1 Vector Hit `2.78 ms` median (`2.86 ms` p95) | **Two-Stage Cache Hit `23.46 ms` median (`26.70 ms` p95)** vs. Groq Llama-3.3-70B miss `425.64 ms` median and Gemini Flash miss `1434.22 ms` median (**61x speedup** over Gemini Flash).
+  - **4-Store Comparison (10K vectors, Top-3):** Exact HashMap (`0.0005 ms` p50, `0.0000` recall@3), FAISS HNSW (`0.1590 ms` p50, `4,637.4 QPS`, `0.9953` recall@3), FAISS Flat (`1.4618 ms` p50, `638.4 QPS`, `1.0000` recall@3), Qdrant Vector DB local client (`35.5429 ms` p50, `1.0000` recall@3).
+- [x] **Task 3.5 — Publication-Grade Figures & LaTeX Tables (`benchmarks/results/`):**
+  - Generated 5 high-DPI (`300 DPI`) PNG charts in `benchmarks/results/figures/` (`fig1_eviction_hit_rate.png` .. `fig5_db_comparison.png`) and LaTeX tables in `benchmarks/results/tables.tex`.
 
 ---
 

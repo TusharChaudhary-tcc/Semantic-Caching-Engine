@@ -153,3 +153,13 @@ Scanning 1,000,000 items to find the lowest score is slow ($O(N)$). Instead, **K
 
 **Q4: What is the novelty of your eviction algorithm?**  
 > Standard LRU only checks time and accidentally deletes expensive LLM responses. Our Semantic Density & Cost-Weighted algorithm preserves high-cost, high-frequency, and densely-clustered queries while using K-Tail sampling for $O(1)$ eviction speed.
+
+---
+
+## 10. How We Benchmark & Prove It (Phase 3 Evaluation Concepts)
+
+To prove our system works for a research paper, we don't just guess — we replay **50,000 real user conversations** from the LMSYS Chatbot Arena dataset and measure four things:
+1. **Hit Ratio vs. Tokens Saved:** Even a 1–2% higher hit rate matters, and **which** items you keep matters even more! At 500-entry capacity, our Semantic Density + Cost policy saved **1,578,980 tokens** vs. **1,170,482 tokens** for LRU (**+34.9% more tokens saved**), because it keeps expensive, long-answer queries alive.
+2. **Latency Percentiles (`p50` vs. `p95`):** Averages hide slow spikes. `p95` means 95% of all requests finish faster than that number. Our Two-Stage cache hit achieves **`23.46 ms` median (`26.70 ms` p95)** — **61x faster** than Gemini Flash (`1434.22 ms` median).
+3. **K-Tail Ablation Study:** An *ablation* changes one knob at a time (e.g., `K = 25` vs. `100` vs. `250`) to prove our default `K = 100` hits the sweet spot between speed (`12.67s` vs. `73.01s` for `K=250`) and hit rate (`18.98%`).
+4. **Vector Store Tradeoff:** Exact HashMaps (like Redis) are ultra-fast (`0.0005 ms`) but get **`0.0000` semantic recall** on paraphrased queries, whereas HNSW vector indexes (Qdrant / FAISS) achieve **~`0.995–1.000` recall@3** in milliseconds.
