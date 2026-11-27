@@ -163,3 +163,11 @@ To prove our system works for a research paper, we don't just guess — we repla
 2. **Latency Percentiles (`p50` vs. `p95`):** Averages hide slow spikes. `p95` means 95% of all requests finish faster than that number. Our Two-Stage cache hit achieves **`23.46 ms` median (`26.70 ms` p95)** — **61x faster** than Gemini Flash (`1434.22 ms` median).
 3. **K-Tail Ablation Study:** An *ablation* changes one knob at a time (e.g., `K = 25` vs. `100` vs. `250`) to prove our default `K = 100` hits the sweet spot between speed (`12.67s` vs. `73.01s` for `K=250`) and hit rate (`18.98%`).
 4. **Vector Store Tradeoff:** Exact HashMaps (like Redis) are ultra-fast (`0.0005 ms`) but get **`0.0000` semantic recall** on paraphrased queries, whereas HNSW vector indexes (Qdrant / FAISS) achieve **~`0.995–1.000` recall@3** in milliseconds.
+
+---
+
+## 11. How the 3D Frontend Talks to the Backend (Phase 4 Concepts)
+
+1. **REST API + `fetch` (`frontend/src/api/client.js`):** When you click **Send** in React (`localhost:5173`), the browser sends a JSON `POST` request to Spring Boot (`localhost:8080/api/cache`). Spring Boot runs Stage 1 + Stage 2 + Eviction and returns JSON (`answer`, `cacheHit`, `stage1Similarity`, `stage2CrossEncoderScore`, `latencyMs`, `provider`).
+2. **In-Memory Vector Store vs. Qdrant (`@ConditionalOnProperty`):** Spring Boot uses a smart switch (`cache.vector-store`). If Qdrant is running on port `6334`, it uses Qdrant; if Docker/Qdrant isn't installed on a developer's laptop, `start-backend.ps1` automatically switches to `InMemoryVectorRepository` (a `ConcurrentHashMap` in Java that computes cosine similarity directly in RAM).
+3. **3D CSS Perspective & `localStorage`:** The intro screen uses CSS `perspective(1200px)` and `transform-origin` anchored to the letter `C` to zoom smoothly at 60fps without heavy 3D game libraries. We save `sce_intro_seen` in `localStorage` so repeat visits load fast, while `Ctrl + Shift + R` clears it to replay the sky intro.

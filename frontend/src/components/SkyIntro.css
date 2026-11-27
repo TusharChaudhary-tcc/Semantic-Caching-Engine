@@ -1,0 +1,292 @@
+.sky-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: radial-gradient(circle at 82% 12%, #fff8dc 0%, #c6e6fb 22%, #6eb8ef 58%, #2e7ec3 100%);
+  user-select: none;
+  will-change: opacity;
+}
+
+/* Diagonal volumetric sunbeams matching the sky aesthetic */
+.sky-sunbeams {
+  position: absolute;
+  top: -25%;
+  right: -15%;
+  width: 140vw;
+  height: 140vh;
+  background: repeating-conic-gradient(
+    from 215deg at 88% 12%,
+    rgba(255, 255, 255, 0.22) 0deg 6deg,
+    rgba(255, 255, 255, 0) 6deg 18deg
+  );
+  filter: blur(18px);
+  pointer-events: none;
+  transition: transform 0.15s ease-out;
+}
+
+.sky-nav {
+  position: absolute;
+  top: 24px;
+  left: 32px;
+  right: 32px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sky-brand-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #0b2545;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(17, 56, 98, 0.12);
+}
+
+.sky-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  box-shadow: 0 0 10px #38bdf8;
+}
+
+.sky-skip-btn {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(11, 37, 69, 0.78);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.sky-skip-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(11, 37, 69, 0.95);
+}
+
+.sky-3d-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+
+.sky-hero-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 1100px;
+  transform: translateZ(40px);
+}
+
+.sky-kicker {
+  margin: 0 0 14px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: rgba(11, 37, 69, 0.78);
+  font-weight: 600;
+}
+
+.sky-title {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(2.8rem, 7vw, 6.2rem);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #09213e;
+  text-shadow:
+    0 12px 35px rgba(255, 255, 255, 0.85),
+    0 2px 6px rgba(13, 51, 92, 0.18);
+}
+
+.zoom-target-c {
+  display: inline-block;
+  color: #0369a1;
+  text-shadow:
+    0 0 32px rgba(255, 255, 255, 0.95),
+    0 8px 28px rgba(3, 105, 161, 0.35);
+}
+
+.sky-subtitle {
+  margin: 18px auto 0;
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(11, 37, 69, 0.84);
+  font-weight: 500;
+}
+
+/* Soft Volumetric CSS Clouds */
+.cloud-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.cloud {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.96), rgba(235, 246, 255, 0.65) 65%, rgba(255, 255, 255, 0));
+  filter: blur(10px);
+  animation: cloudDrift 18s ease-in-out infinite alternate;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.cloud-1 {
+  width: 440px;
+  height: 150px;
+  top: 16%;
+  left: -4%;
+  opacity: 0.88;
+}
+
+.cloud-2 {
+  width: 520px;
+  height: 170px;
+  top: 56%;
+  right: -6%;
+  opacity: 0.82;
+  animation-delay: -5s;
+}
+
+.cloud-3 {
+  width: 360px;
+  height: 130px;
+  top: 22%;
+  right: 18%;
+  opacity: 0.62;
+  animation-delay: -11s;
+}
+
+.cloud-4 {
+  width: 560px;
+  height: 180px;
+  bottom: -4%;
+  left: 8%;
+  opacity: 0.92;
+  filter: blur(14px);
+}
+
+.cloud-5 {
+  width: 460px;
+  height: 150px;
+  top: 68%;
+  left: 55%;
+  opacity: 0.78;
+  filter: blur(14px);
+  animation-delay: -7s;
+}
+
+@keyframes cloudDrift {
+  from {
+    transform: translateX(-18px) translateY(0px);
+  }
+  to {
+    transform: translateX(22px) translateY(-10px);
+  }
+}
+
+.sky-scroll-cue {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #0b2545;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scroll-mouse {
+  width: 24px;
+  height: 38px;
+  border-radius: 999px;
+  border: 2px solid rgba(11, 37, 69, 0.55);
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+
+.scroll-wheel {
+  width: 4px;
+  height: 8px;
+  border-radius: 999px;
+  background: #0369a1;
+  animation: wheelBounce 1.4s ease-in-out infinite;
+}
+
+@keyframes wheelBounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(10px);
+    opacity: 0.25;
+  }
+}
+
+.dive-pill-btn {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.75);
+  color: #0369a1;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(3, 105, 161, 0.18);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.dive-pill-btn:hover {
+  transform: translateY(-2px);
+  background: #ffffff;
+}
+
+.sky-progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.sky-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+  transition: width 0.08s linear;
+}

@@ -23,7 +23,7 @@
 | **Phase 1** | Enterprise Backend Core & Baseline Vector Cache | **COMPLETE (PASS)** | Production Java 21 / Spring Boot gateway, dual-token security, Qdrant integration, Gemini bi-encoder baseline, 658 automated tests. |
 | **Phase 2** | Two-Stage Cross-Encoder & Novel Eviction Engine | **COMPLETE (PASS)** | In-process ONNX Stage-2 intent verifier, custom Semantic Density & Cost-Weighted eviction policy ($Score = w_1 R + w_2 F + w_3 D + C$), Multi-LLM routing (Gemini + Groq). |
 | **Phase 3** | Research Benchmarking & Empirical Evaluation | **COMPLETE (PASS)** | Offline simulation of 50K LMSYS Chatbot Arena queries, LRU vs. LFU vs. Semantic Density + K-Tail comparison, latency delta (<27ms p95), 4-store DB benchmark, and paper figures/LaTeX tables. |
-| **Phase 4** | Frontend Dashboard Integration & Stampede Defense | **PENDING** | React UI connection, live visualizer for Stage 1 vs Stage 2 scores, request coalescing (anti-stampede), and AWS deployment packaging. |
+| **Phase 4** | Frontend Dashboard Integration & Stampede Defense | **IN PROGRESS** | 3D Blue Sky zoom-through intro (`SkyIntro.jsx`), top-to-bottom dashboard reveal, live Spring Boot API + metrics + Groq/Gemini switcher; remaining: request coalescing & Docker Compose. |
 
 ---
 
@@ -121,16 +121,23 @@ Execute systematic research benchmarks using **50,000 real conversational querie
 
 ---
 
-## ⚪ PHASE 4: Frontend Integration & Production Hardening (UPCOMING)
+## 🟡 PHASE 4: Frontend Integration & Production Hardening (IN PROGRESS)
 
 ### 4.1 Core Idea
 Connect the React UI to the live backend, expose interactive cache diagnostics, and deploy with Docker Compose on cloud infrastructure (AWS).
 
 ### 4.2 Deliverables
-- Connect React dashboard (`frontend/src/App.jsx`) to backend REST API.
-- Implement Stage 1 vs. Stage 2 score visualizer badge (showing vector similarity % alongside cross-encoder confidence %).
-- Implement Cache Stampede prevention (Request Coalescing via Java `CompletableFuture`).
-- Root `docker-compose.yml` for unified setup: PostgreSQL + Qdrant + Spring Boot + React Vite frontend.
+- [x] **Task 4.1 — 3D Blue Sky Intro & Live React Dashboard Integration:** *(Completed)*
+  - Built `frontend/src/components/SkyIntro.jsx` & `SkyIntro.css`: Luminous blue sky with sunbeams, 3D parallax clouds, and scroll-driven camera zoom directly through the second `C` in `"Semantic Cache Engine"`.
+  - Built smart boot behavior (`localStorage` + `Ctrl+Shift+R` hard-reload detection + `Replay 3D Sky` button): full 3D sky on first visit or hard refresh, fast 0.9s resume splash on repeat visits.
+  - Built top-to-bottom dashboard reveal with staggered "being built" card/heading animations and 3D tilt KPI cards.
+  - Built `frontend/src/api/client.js` & `AuthModal.jsx`: Full integration with `POST /api/cache`, `GET /api/metrics`, `GET /api/health/readiness`, and `/api/auth/*` (JWT + refresh token rotation).
+  - Live chat console displays `CACHE HIT` / `SENT TO LLM` / `CROSS-ENCODER REJECTED` badges, Stage-1 & Stage-2 score bars, latency (`ms`), and Groq/Gemini provider switcher.
+  - Added zero-Docker `InMemoryVectorRepository.java` (`cache.vector-store=memory`), one-command `start-backend.ps1` (auto-loads `.env` and detects Qdrant vs. In-Memory), and updated Groq default model to `openai/gpt-oss-20b`.
+- [ ] **Task 4.2 — UI Polish, Cache Warm-Up, Stampede Defense & Docker Compose:**
+  - Iterative UI/UX polish and optional LMSYS dataset cache warm-up seeder.
+  - Implement Request Coalescing via Java `CompletableFuture`.
+  - Root `docker-compose.yml` for unified setup: PostgreSQL + Qdrant + Spring Boot + React Vite frontend.
 
 ---
 

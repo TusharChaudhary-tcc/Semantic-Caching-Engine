@@ -23,6 +23,7 @@ import io.qdrant.client.grpc.Points;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 import java.net.SocketTimeoutException;
@@ -44,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Repository
+@ConditionalOnProperty(name = "cache.vector-store", havingValue = "qdrant", matchIfMissing = true)
 public class QdrantVectorRepository implements VectorRepository {
 
     private static final Logger log = LoggerFactory.getLogger(QdrantVectorRepository.class);
