@@ -17,7 +17,7 @@ public class GroqConfig {
 
     public GroqConfig(
             @Value("${groq.api-key:}") String apiKey,
-            @Value("${groq.model:llama-3.3-70b-versatile}") String model,
+            @Value("${groq.model:openai/gpt-oss-20b}") String model,
             @Value("${groq.base-url:https://api.groq.com/openai/v1/chat/completions}") String baseUrl,
             @Value("${groq.timeout-seconds:30}") int timeoutSeconds,
             @Value("${llm.default-provider:gemini}") String defaultProvider

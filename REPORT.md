@@ -67,6 +67,18 @@ Traditional caches (like Redis) only remember **exact word-for-word matches**. I
 
 ---
 
-## 🔮 What Comes Next (Phase 4)
+## 🟢 What the System Can Do After Phase 4 — Task 4.1 (Live 3D UI & Zero-Docker Run)
 
-- **Phase 4 (Live Frontend & Deployment):** Connect the React dashboard so you can see live Stage-1 vs. Stage-2 confidence scores, switch between Gemini and Groq in the UI, implement request coalescing (anti-stampede), and deploy cleanly with Docker Compose.
+**Goal of Phase 4 (Task 4.1):** Connect a live, interactive React dashboard directly to our Spring Boot engine so anyone can test semantic hits, misses, and providers in the browser.
+
+**What it is now able to do:**
+- **3D Blue Sky Zoom-Through Intro:** On first visit (or `Ctrl + Shift + R` hard refresh), users see a luminous 3D sky with drifting clouds and zoom directly through the **`C`** in *"Semantic Cache Engine"* into a top-to-bottom dashboard reveal. Return visits skip straight in via a quick `0.9s` cached-state splash.
+- **Live Semantic Query Console:** Users can type any prompt, switch between **Groq (`openai/gpt-oss-20b`)** and **Gemini**, and see live **⚡ CACHE HIT** vs. **🧠 SENT TO LLM** vs. **🛡️ CROSS-ENCODER REJECTED** badges, Stage-1 & Stage-2 confidence bars, and response latency (`ms`).
+- **Zero-Docker Local Startup:** Includes an automatic `InMemoryVectorRepository` fallback and a one-command `start-backend.ps1` script that loads `.env` keys and boots the engine even on machines without Docker.
+
+---
+
+## 🔮 What Comes Next (Phase 4 — Task 4.2)
+
+- **UI Polish & Dataset Cache Warm-Up:** Iterative UI refinements plus pre-seeding popular LMSYS Chatbot Arena Q&A pairs on startup.
+- **Production Hardening:** Request coalescing (anti-stampede) via `CompletableFuture` and `docker-compose.yml` packaging for cloud deployment.

@@ -2,3 +2,6 @@ Knowledge/chatbot_arena_dataset.csv
 benchmarks/.venv/
 benchmarks/data/
 benchmarks/__pycache__/
+.env
+*.env
+backend/data/

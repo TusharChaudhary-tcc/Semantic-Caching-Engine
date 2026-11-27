@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.net.ConnectException;
@@ -28,6 +29,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 @Component
+@ConditionalOnProperty(name = "cache.vector-store", havingValue = "qdrant", matchIfMissing = true)
 public class QdrantCollectionInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(QdrantCollectionInitializer.class);

@@ -1,427 +1,461 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { authApi, cacheApi } from "./api/client";
+import AuthModal from "./components/AuthModal";
+import SkyIntro from "./components/SkyIntro";
 import "./App.css";
 
-const initialChats = [
-  "How does semantic caching work?",
-  "Explain LLM caching",
-  "What are embeddings?",
-  "How does a cross-encoder work?",
+const INTRO_STORAGE_KEY = "sce_intro_seen";
+
+const DEMO_PROMPTS = [
+  { tag: "SEED QUERY", text: "How do I reset my password?" },
+  { tag: "PARAPHRASE (HIT)", text: "I forgot my password, how can I reset it?" },
+  { tag: "INTENT TRAP (MISS)", text: "What is a good password strength?" },
+  { tag: "TECH QUERY", text: "Explain Docker vs Kubernetes in 3 bullets" },
 ];
 
-const mockResponses = [
-  {
-    text: "Semantic caching stores responses based on the meaning of a query rather than exact text matching.",
-    hit: true,
-    time: 42,
-  },
-  {
-    text: "The engine converts the query into a semantic representation, searches for similar cached queries, and verifies the best match.",
-    hit: true,
-    time: 37,
-  },
-  {
-    text: "No sufficiently similar cached response was found, so this request would normally be sent to the LLM.",
-    hit: false,
-    time: 184,
-  },
+const PIPELINE_STEPS = [
+  "Generating 768-dim Gemini Embedding...",
+  "Searching Qdrant Vector Index (Stage 1)...",
+  "Running ONNX Cross-Encoder Intent Check (Stage 2)...",
+  "Routing to Upstream LLM (Groq / Gemini)...",
 ];
 
-function App() {
-  const [showRecentChats, setShowRecentChats] = useState(true);
-  const [showMetrics, setShowMetrics] = useState(false);
-  const [newChatRotated, setNewChatRotated] = useState(false);
-  const [message, setMessage] = useState("");
+function detectInitialIntroMode() {
+  try {
+    const navEntry = performance.getEntriesByType?.("navigation")?.[0];
+    const isHardReload = navEntry?.type === "reload" && navEntry?.transferSize > 0;
+    if (isHardReload) {
+      localStorage.removeItem(INTRO_STORAGE_KEY);
+      return "sky";
+    }
+    return localStorage.getItem(INTRO_STORAGE_KEY) === "1" ? "quick" : "sky";
+  } catch {
+    return "sky";
+  }
+}
+
+export default function App() {
+  const [introMode, setIntroMode] = useState(detectInitialIntroMode);
+  const [skyProgress, setSkyProgress] = useState(0);
+  const [dashboardReady, setDashboardReady] = useState(() => introMode === "quick");
+  const [showQuickSplash, setShowQuickSplash] = useState(() => introMode === "quick");
+
+  const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const [provider, setProvider] = useState("auto");
+  const [promptInput, setPromptInput] = useState("");
   const [messages, setMessages] = useState([]);
-  const [chats, setChats] = useState(initialChats);
-  const [activeChat, setActiveChat] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [metrics, setMetrics] = useState({ time: "—", hit: 0, miss: 0 });
+  const [pipelineStepIdx, setPipelineStepIdx] = useState(0);
+  const [lastLatency, setLastLatency] = useState(null);
 
-  const totalRequests = metrics.hit + metrics.miss;
-  const hitRate =
-    totalRequests === 0 ? 0 : Math.round((metrics.hit / totalRequests) * 100);
+  const [metrics, setMetrics] = useState({
+    totalRequests: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    hitRate: 0,
+    geminiGenerationCalls: 0,
+    qdrantOperations: 0,
+  });
+  const [healthUp, setHealthUp] = useState(null);
 
-  const handleSend = () => {
-    const query = message.trim();
-    if (!query || loading) return;
+  const messagesEndRef = useRef(null);
 
-    setMessages((previous) => [
-      ...previous,
-      { id: Date.now(), type: "user", text: query },
-    ]);
-    setMessage("");
-    setLoading(true);
+  // Detect Ctrl+Shift+R so hard reload always replays the 3D Sky Intro
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+        localStorage.removeItem(INTRO_STORAGE_KEY);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-    setTimeout(() => {
-      const response =
-        mockResponses[Math.floor(Math.random() * mockResponses.length)];
+  // Quick splash timer on repeat visits
+  useEffect(() => {
+    if (introMode !== "quick") return;
+    const timer = setTimeout(() => {
+      setShowQuickSplash(false);
+      setDashboardReady(true);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [introMode]);
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: Date.now() + 1,
-          type: "assistant",
-          text: response.text,
-          hit: response.hit,
-        },
-      ]);
+  const refreshTelemetry = useCallback(async () => {
+    try {
+      const [m, h] = await Promise.allSettled([cacheApi.getMetrics(), cacheApi.getHealth()]);
+      if (m.status === "fulfilled" && m.value) {
+        setMetrics(m.value);
+      }
+      if (h.status === "fulfilled" && h.value) {
+        setHealthUp(h.value.status === "UP");
+      } else {
+        setHealthUp(false);
+      }
+    } catch {
+      setHealthUp(false);
+    }
+  }, []);
 
-      setMetrics((previous) => ({
-        time: response.time,
-        hit: response.hit ? previous.hit + 1 : previous.hit,
-        miss: response.hit ? previous.miss : previous.miss + 1,
-      }));
+  useEffect(() => {
+    authApi.silentRefresh().catch(() => {});
+    refreshTelemetry();
+    const interval = setInterval(refreshTelemetry, 15000);
+    return () => clearInterval(interval);
+  }, [refreshTelemetry]);
 
-      setChats((previous) =>
-        previous.includes(query) ? previous : [query, ...previous].slice(0, 8)
-      );
-      setActiveChat(query);
-      setLoading(false);
-    }, 1100);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  useEffect(() => {
+    if (!loading) return;
+    setPipelineStepIdx(0);
+    const id = setInterval(() => {
+      setPipelineStepIdx((prev) => (prev + 1) % PIPELINE_STEPS.length);
+    }, 650);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  const handleSkyComplete = useCallback(() => {
+    localStorage.setItem(INTRO_STORAGE_KEY, "1");
+    setIntroMode("done");
+    setDashboardReady(true);
+  }, []);
+
+  const handleReplaySky = () => {
+    localStorage.removeItem(INTRO_STORAGE_KEY);
+    setSkyProgress(0);
+    setDashboardReady(false);
+    setIntroMode("sky");
   };
 
-  const handleKeyDown = (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      handleSend();
+  const handleSend = async (overridePrompt = null) => {
+    const query = (overridePrompt ?? promptInput).trim();
+    if (!query || loading) return;
+
+    setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: query }]);
+    if (!overridePrompt) setPromptInput("");
+    setLoading(true);
+
+    try {
+      const res = await cacheApi.queryPrompt(query, provider);
+      setLastLatency(res.latencyMs ?? null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          text: res.answer,
+          cacheHit: res.cacheHit,
+          stage1Similarity: res.stage1Similarity,
+          stage2CrossEncoderScore: res.stage2CrossEncoderScore,
+          verificationStage: res.verificationStage,
+          latencyMs: res.latencyMs,
+          provider: res.provider,
+        },
+      ]);
+      refreshTelemetry();
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "error",
+          text: `Backend error: ${err.message}. Make sure Spring Boot (localhost:8080) and Qdrant (localhost:6334) are running.`,
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setMessage("");
-    setActiveChat(null);
-    setMetrics({ time: "—", hit: 0, miss: 0 });
+  const handleLogout = async () => {
+    await authApi.logout();
+    setUser(null);
   };
 
-  const handleOldChat = (chat) => {
-    setActiveChat(chat);
-    setMessage(chat);
-  };
+  const hitRatePct = Math.round((metrics.hitRate || 0) * 100);
+  const ringRadius = 22;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCircumference - (hitRatePct / 100) * ringCircumference;
 
-  const toggleChats = () => {
-    setShowRecentChats((visible) => !visible);
-    setShowMetrics(false);
-  };
-
-  const toggleMetrics = () => {
-    setShowMetrics((visible) => !visible);
-    setShowRecentChats(false);
-  };
-
-  const startNewChat = () => {
-    handleNewChat();
-    setNewChatRotated((rotated) => !rotated);
-  };
+  // Top-to-bottom reveal progress synchronized with SkyIntro scroll-through
+  const wipePercent =
+    introMode === "sky" ? Math.max(0, Math.min(100, ((skyProgress - 0.68) / 0.32) * 100)) : 100;
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="brand">
-          <div className="brand-icon">SC</div>
-          <div className="brand-copy">
-            <h1>Semantic Caching Engine</h1>
-            <p>Deep intent. Smarter caching.</p>
-          </div>
+    <>
+      {introMode === "sky" && (
+        <SkyIntro onProgressChange={setSkyProgress} onComplete={handleSkyComplete} />
+      )}
+
+      {showQuickSplash && (
+        <div className="quick-resume-splash">
+          <span className="quick-resume-badge">CACHE STATE RESTORED</span>
+          <h2>Semantic Cache Engine</h2>
         </div>
+      )}
 
-        <div className="header-right">
-          <button
-            className="header-button recent-chats-toggle"
-            onClick={toggleChats}
-            aria-expanded={showRecentChats}
-            aria-controls="recent-chats-sidebar"
-          >
-            <span className="wide-label">
-              {showRecentChats ? "Hide chats" : "Recent chats"}
-            </span>
-            <span className="compact-label">
-              {showRecentChats ? "Hide chats" : "Chats"}
-            </span>
-          </button>
-
-          <button
-            className="header-button metrics-toggle"
-            onClick={toggleMetrics}
-            aria-expanded={showMetrics}
-            aria-controls="system-metrics-panel"
-          >
-            {showMetrics ? "Hide metrics" : "Metrics"}
-          </button>
-
-          <div className="engine-status">
-            <span className="pulse-dot" />
-            <span>Engine Online</span>
-          </div>
-
-          <button className="header-button settings-button" title="Settings">
-            Settings
-          </button>
-        </div>
-      </header>
-
-      <main
-        className={`dashboard ${
-          showRecentChats ? "recent-open" : "recent-closed"
-        }`}
+      <div
+        className={`dashboard-root ${dashboardReady ? "dashboard-ready reveal-active" : ""}`}
+        style={
+          introMode === "sky"
+            ? {
+                clipPath: `inset(0 0 ${100 - wipePercent}% 0)`,
+                opacity: wipePercent > 0 ? 0.35 + (wipePercent / 100) * 0.65 : 0,
+              }
+            : undefined
+        }
       >
-        <aside className="sidebar" id="recent-chats-sidebar">
-          <div className="sidebar-heading">
-            <span>Recent Chats</span>
-            <button
-              className={`new-chat-button ${newChatRotated ? "rotated" : ""}`}
-              onClick={startNewChat}
-              title="New chat"
-              aria-label="New chat"
-            >
-              +
-            </button>
-          </div>
+        <div className="dashboard-grid-bg" />
 
-          <div className="chat-list">
-            {chats.map((chat, index) => (
-              <button
-                key={`${chat}-${index}`}
-                className={`chat-item ${
-                  activeChat === chat ? "selected" : ""
-                }`}
-                onClick={() => handleOldChat(chat)}
-                title={chat}
-              >
-                <span className="chat-icon">↗</span>
-                <span className="chat-title">{chat}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="sidebar-bottom">
-            <div className="engine-card">
-              <div className="engine-card-top">
-                <span className="mini-brain">SC</span>
-                <span className="online-label">ONLINE</span>
-              </div>
-              <strong>Semantic Engine</strong>
-              <small>Ready to process semantic queries</small>
-            </div>
-          </div>
-        </aside>
-
-        <section className="chat-section">
-          <div className="chat-header">
+        {/* Header */}
+        <header className="dash-header build-reveal delay-1">
+          <div className="dash-brand">
+            <div className="dash-logo-3d">SC</div>
             <div>
-              <div className="title-row">
-                <h2>Semantic Query</h2>
-                <span className="cache-ready">
-                  <span /> CACHE READY
-                </span>
-              </div>
-              <p>
-                Ask a question and let the semantic cache find the best
-                response.
-              </p>
-            </div>
-
-            <div className="query-controls">
-              <span className="control-chip">
-                Model <strong>default</strong>
-              </span>
-              <span className="control-chip">
-                Threshold <strong>0.82</strong>
-              </span>
-              <span className="control-chip">
-                Region <strong>local</strong>
-              </span>
+              <h1 className="heading-build">Semantic Cache Engine</h1>
+              <span>Two-Stage Vector + ONNX Cross-Encoder Gateway</span>
             </div>
           </div>
 
-          <div className="messages">
-            {messages.length === 0 ? (
-              <div className="welcome">
-                <div className="welcome-icon">
-                  <span className="brain-glow">SC</span>
-                </div>
-                <h2>Start a conversation</h2>
-                <p>Test your semantic caching engine with a query.</p>
-                <div className="suggestions">
-                  <button onClick={() => setMessage("What is semantic caching?")}>
-                    <span>01</span> What is semantic caching?
-                  </button>
-                  <button
-                    onClick={() => setMessage("How does an LLM cache work?")}
-                  >
-                    <span>02</span> How does an LLM cache work?
-                  </button>
-                  <button
-                    onClick={() => setMessage("Why are embeddings useful?")}
-                  >
-                    <span>03</span> Why are embeddings useful?
-                  </button>
+          <div className="dash-header-actions">
+            <div className="status-pill">
+              <span className={`status-dot ${healthUp ? "up" : "down"}`} />
+              {healthUp === null ? "Checking..." : healthUp ? "Backend + Qdrant UP" : "Backend Offline"}
+            </div>
+
+            <button type="button" className="ghost-btn" onClick={handleReplaySky}>
+              ☁️ Replay 3D Sky
+            </button>
+
+            {user ? (
+              <button type="button" className="ghost-btn" onClick={handleLogout}>
+                {user.username} · Sign Out
+              </button>
+            ) : (
+              <button type="button" className="primary-btn" onClick={() => setShowAuthModal(true)}>
+                Sign In
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Main 3D Workspace */}
+        <main className="dash-main">
+          {/* 3D KPI Row */}
+          <section className="metrics-row">
+            <div className="glass-card metric-card-3d build-reveal delay-2">
+              <div>
+                <div className="metric-label">Cache Hit Rate</div>
+                <div className="metric-value">{hitRatePct}%</div>
+                <div className="metric-sub">
+                  {metrics.cacheHits} hits / {metrics.cacheMisses} misses
                 </div>
               </div>
-            ) : (
-              <div className="message-container">
-                {messages.map((item) => (
-                  <div key={item.id} className={`message-row ${item.type}`}>
-                    <div className="message-avatar">
-                      {item.type === "user" ? "You" : "SC"}
-                    </div>
-                    <div className="message-content">
-                      <div className="message-label">
-                        {item.type === "user" ? "You" : "Semantic Engine"}
-                      </div>
-                      <div className="message-bubble">{item.text}</div>
-                      {item.type === "assistant" && (
-                        <div className="response-meta">
-                          <span className={item.hit ? "hit-badge" : "miss-badge"}>
-                            {item.hit ? "● CACHE HIT" : "● CACHE MISS"}
+              <svg className="ring-svg" viewBox="0 0 56 56">
+                <circle className="ring-bg" cx="28" cy="28" r={ringRadius} />
+                <circle
+                  className="ring-fg"
+                  cx="28"
+                  cy="28"
+                  r={ringRadius}
+                  strokeDasharray={ringCircumference}
+                  strokeDashoffset={ringOffset}
+                />
+              </svg>
+            </div>
+
+            <div className="glass-card metric-card-3d build-reveal delay-3">
+              <div>
+                <div className="metric-label">Total Queries</div>
+                <div className="metric-value">{metrics.totalRequests}</div>
+                <div className="metric-sub">{metrics.qdrantOperations} Qdrant ops</div>
+              </div>
+            </div>
+
+            <div className="glass-card metric-card-3d build-reveal delay-4">
+              <div>
+                <div className="metric-label">Last Response Latency</div>
+                <div className="metric-value">{lastLatency !== null ? `${lastLatency} ms` : "—"}</div>
+                <div className="metric-sub">Target &lt; 40 ms on HIT</div>
+              </div>
+            </div>
+
+            <div className="glass-card metric-card-3d build-reveal delay-5">
+              <div>
+                <div className="metric-label">LLM Calls Saved</div>
+                <div className="metric-value">{metrics.cacheHits}</div>
+                <div className="metric-sub">{metrics.geminiGenerationCalls} Gemini calls</div>
+              </div>
+            </div>
+          </section>
+
+          {/* Sidebar + Chat Workspace */}
+          <section className="workspace-grid build-reveal delay-4">
+            <aside className="glass-card dash-sidebar">
+              <div>
+                <h3 className="sidebar-section-title heading-build">Quick Research Tests</h3>
+                <div className="preset-list">
+                  {DEMO_PROMPTS.map((item) => (
+                    <button
+                      key={item.text}
+                      type="button"
+                      className="preset-btn"
+                      onClick={() => handleSend(item.text)}
+                      disabled={loading}
+                    >
+                      <span className="preset-tag">{item.tag}</span>
+                      <div>{item.text}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pipeline-legend">
+                <strong>How It Evaluates:</strong>
+                <br />
+                1. <strong>Stage 1:</strong> Qdrant Cosine ≥ 0.75
+                <br />
+                2. <strong>Stage 2:</strong> ONNX Cross-Encoder ≥ 0.85
+                <br />
+                3. <strong>Eviction:</strong> K-Tail Semantic Density + Cost
+              </div>
+            </aside>
+
+            <div className="glass-card chat-panel">
+              <div className="chat-panel-header">
+                <h2 className="heading-build">Live Semantic Query Console</h2>
+                <div className="provider-pills" role="group" aria-label="LLM Provider">
+                  {[
+                    { id: "auto", label: "Auto" },
+                    { id: "groq", label: "Groq (Llama 3.3)" },
+                    { id: "gemini", label: "Gemini Flash" },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`provider-pill ${provider === p.id ? "active" : ""}`}
+                      onClick={() => setProvider(p.id)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="chat-messages">
+                {messages.length === 0 ? (
+                  <div className="empty-state">
+                    <h3>Ask anything to test Semantic Caching</h3>
+                    <p>
+                      Try sending a seed question, then rephrase it — or test an intent-trap query to
+                      watch Stage-2 Cross-Encoder block false positives in real time.
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div key={msg.id} className={`msg-row ${msg.role}`}>
+                      <div className="msg-bubble">{msg.text}</div>
+
+                      {msg.role === "assistant" && (
+                        <div className="telemetry-strip">
+                          <span
+                            className={`verdict-badge ${
+                              msg.cacheHit
+                                ? "hit"
+                                : msg.verificationStage === "CROSS_ENCODER_REJECTED"
+                                ? "rejected"
+                                : "miss"
+                            }`}
+                          >
+                            {msg.cacheHit
+                              ? "⚡ CACHE HIT"
+                              : msg.verificationStage === "CROSS_ENCODER_REJECTED"
+                              ? "🛡️ CROSS-ENCODER REJECTED → LLM"
+                              : "🧠 SENT TO LLM"}
                           </span>
-                          <span>Semantic verification complete</span>
+
+                          {typeof msg.stage1Similarity === "number" && (
+                            <div className="score-bar-group">
+                              <span>S1: {(msg.stage1Similarity * 100).toFixed(1)}%</span>
+                              <div className="score-track">
+                                <div
+                                  className="score-fill"
+                                  style={{ width: `${Math.min(100, msg.stage1Similarity * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {typeof msg.stage2CrossEncoderScore === "number" && (
+                            <div className="score-bar-group">
+                              <span>S2: {(msg.stage2CrossEncoderScore * 100).toFixed(1)}%</span>
+                              <div className="score-track">
+                                <div
+                                  className="score-fill"
+                                  style={{
+                                    width: `${Math.min(100, msg.stage2CrossEncoderScore * 100)}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {msg.latencyMs !== null && msg.latencyMs !== undefined && (
+                            <span className="meta-chip">⏱ {msg.latencyMs} ms</span>
+                          )}
+
+                          {msg.provider && <span className="meta-chip">via {msg.provider}</span>}
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
 
                 {loading && (
-                  <div className="message-row assistant">
-                    <div className="message-avatar">SC</div>
-                    <div className="message-content">
-                      <div className="message-label">Semantic Engine</div>
-                      <div className="typing-bubble">
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-                      <div className="processing-text">
-                        Searching semantic cache...
-                      </div>
-                    </div>
+                  <div className="pipeline-loader">
+                    <span className="pulse-dot" />
+                    {PIPELINE_STEPS[pipelineStepIdx]}
                   </div>
                 )}
+
+                <div ref={messagesEndRef} />
               </div>
-            )}
-          </div>
 
-          <div className="input-area">
-            <div className="input-box">
-              <textarea
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask your query..."
-                rows="1"
-              />
-              <button
-                className="send-button"
-                onClick={handleSend}
-                disabled={!message.trim() || loading}
-                aria-label="Send query"
-              >
-                {loading ? "..." : "↑"}
-              </button>
+              <div className="chat-input-bar">
+                <textarea
+                  rows={1}
+                  placeholder="Enter a prompt to query SemanticCache-LLM..."
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => handleSend()}
+                  disabled={loading || !promptInput.trim()}
+                >
+                  {loading ? "Running..." : "Send"}
+                </button>
+              </div>
             </div>
-            <div className="input-footer">
-              <span>Semantic Cache v0.1</span>
-              <span>Enter to send&nbsp; / &nbsp;Shift + Enter for new line</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </main>
+      </div>
 
-        <aside
-          className={`metrics-panel ${
-            showMetrics ? "metrics-open" : "metrics-closed"
-          }`}
-          id="system-metrics-panel"
-        >
-          <div className="panel-title">
-            <div>
-              <h2>System Metrics</h2>
-              <span>REAL-TIME MONITORING</span>
-            </div>
-            <span className="live-indicator">LIVE</span>
-          </div>
-
-          <div className="metric-card">
-            <div className="metric-header">
-              <span>Cross-Encoder</span>
-              <span className="metric-dot" />
-            </div>
-            <div className="metric-value ready">Ready</div>
-            <div className="metric-description">Semantic verification</div>
-          </div>
-
-          <div className="metric-card">
-            <div className="metric-header">
-              <span>Time Taken</span>
-              <span className="metric-symbol">ms</span>
-            </div>
-            <div className="metric-value">
-              {metrics.time}
-              {metrics.time !== "—" && <small> ms</small>}
-            </div>
-            <div className="metric-description">Latest request latency</div>
-          </div>
-
-          <div className="metric-card">
-            <div className="metric-header">
-              <span>Hit / Miss Ratio</span>
-              <span className="metric-symbol">%</span>
-            </div>
-            <div className="ratio-value">
-              <strong>{metrics.hit}</strong>
-              <span>/</span>
-              <strong>{metrics.miss}</strong>
-            </div>
-            <div className="metric-description">
-              {totalRequests === 0
-                ? "No requests yet"
-                : `${hitRate}% cache efficiency`}
-            </div>
-          </div>
-
-          <div className="cache-card">
-            <div className="cache-header">
-              <span>Cache Efficiency</span>
-              <strong>{hitRate}%</strong>
-            </div>
-            <div className="progress">
-              <div
-                className="progress-fill"
-                style={{ width: `${hitRate}%` }}
-              />
-            </div>
-            <div className="cache-footer">
-              <span>{totalRequests} requests</span>
-              <span>
-                {hitRate >= 70
-                  ? "Excellent"
-                  : totalRequests === 0
-                  ? "Waiting"
-                  : "Learning"}
-              </span>
-            </div>
-          </div>
-
-          <div className="pipeline-card">
-            <div className="pipeline-title">Processing Pipeline</div>
-            <PipelineStep number="01" title="Query" />
-            <PipelineStep number="02" title="Embedding" />
-            <PipelineStep number="03" title="Similarity Search" />
-            <PipelineStep number="04" title="Cross-Encoder" />
-          </div>
-        </aside>
-      </main>
-    </div>
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={(u) => setUser(u)} />
+      )}
+    </>
   );
 }
-
-function PipelineStep({ number, title }) {
-  return (
-    <div className="pipeline-step">
-      <div className="pipeline-number active">{number}</div>
-      <span>{title}</span>
-    </div>
-  );
-}
-
-export default App;
