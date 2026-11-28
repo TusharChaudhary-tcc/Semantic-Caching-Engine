@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Lenis from "lenis";
+import useEmblaCarousel from "embla-carousel-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+  PanelLeft,
+  PanelRight,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { authApi, cacheApi } from "./api/client";
 import AuthModal from "./components/AuthModal";
+import MetricsInspector from "./components/MetricsInspector";
 import SkyIntro from "./components/SkyIntro";
 import "./App.css";
 
@@ -15,7 +27,7 @@ const DEMO_PROMPTS = [
 
 const PIPELINE_STEPS = [
   "Generating 768-dim Gemini Embedding...",
-  "Searching Qdrant Vector Index (Stage 1)...",
+  "Searching Vector Index (Stage 1)...",
   "Running ONNX Cross-Encoder Intent Check (Stage 2)...",
   "Routing to Upstream LLM (Groq / Gemini)...",
 ];
@@ -40,15 +52,20 @@ export default function App() {
   const [dashboardReady, setDashboardReady] = useState(() => introMode === "quick");
   const [showQuickSplash, setShowQuickSplash] = useState(() => introMode === "quick");
 
+  // Antigravity-style 3-pane snap controls
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [provider, setProvider] = useState("auto");
   const [promptInput, setPromptInput] = useState("");
   const [messages, setMessages] = useState([]);
+  const [queryHistory, setQueryHistory] = useState([]);
+  const [lastResponse, setLastResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pipelineStepIdx, setPipelineStepIdx] = useState(0);
-  const [lastLatency, setLastLatency] = useState(null);
 
   const [metrics, setMetrics] = useState({
     totalRequests: 0,
@@ -61,8 +78,32 @@ export default function App() {
   const [healthUp, setHealthUp] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const chatContentRef = useRef(null);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
 
-  // Detect Ctrl+Shift+R so hard reload always replays the 3D Sky Intro
+  useEffect(() => {
+    if (!chatScrollRef.current || !chatContentRef.current) return;
+    const lenis = new Lenis({
+      wrapper: chatScrollRef.current,
+      content: chatContentRef.current,
+      lerp: 0.1,
+      smoothWheel: true,
+    });
+
+    let rafId = 0;
+    const raf = (time) => {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    };
+    rafId = requestAnimationFrame(raf);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      lenis.destroy();
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
@@ -73,13 +114,12 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Quick splash timer on repeat visits
   useEffect(() => {
     if (introMode !== "quick") return;
     const timer = setTimeout(() => {
       setShowQuickSplash(false);
       setDashboardReady(true);
-    }, 900);
+    }, 850);
     return () => clearTimeout(timer);
   }, [introMode]);
 
@@ -142,20 +182,22 @@ export default function App() {
 
     try {
       const res = await cacheApi.queryPrompt(query, provider);
-      setLastLatency(res.latencyMs ?? null);
-      setMessages((prev) => [
+      const entry = {
+        id: Date.now() + 1,
+        role: "assistant",
+        text: res.answer,
+        cacheHit: res.cacheHit,
+        stage1Similarity: res.stage1Similarity,
+        stage2CrossEncoderScore: res.stage2CrossEncoderScore,
+        verificationStage: res.verificationStage,
+        latencyMs: res.latencyMs,
+        provider: res.provider,
+      };
+      setMessages((prev) => [...prev, entry]);
+      setLastResponse(res);
+      setQueryHistory((prev) => [
         ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: res.answer,
-          cacheHit: res.cacheHit,
-          stage1Similarity: res.stage1Similarity,
-          stage2CrossEncoderScore: res.stage2CrossEncoderScore,
-          verificationStage: res.verificationStage,
-          latencyMs: res.latencyMs,
-          provider: res.provider,
-        },
+        { id: entry.id, latencyMs: res.latencyMs ?? 0, cacheHit: Boolean(res.cacheHit) },
       ]);
       refreshTelemetry();
     } catch (err) {
@@ -164,7 +206,7 @@ export default function App() {
         {
           id: Date.now() + 1,
           role: "error",
-          text: `Backend error: ${err.message}. Make sure Spring Boot (localhost:8080) and Qdrant (localhost:6334) are running.`,
+          text: `Backend error: ${err.message}. Make sure Spring Boot (localhost:8080) is running.`,
         },
       ]);
     } finally {
@@ -177,14 +219,17 @@ export default function App() {
     setUser(null);
   };
 
-  const hitRatePct = Math.round((metrics.hitRate || 0) * 100);
-  const ringRadius = 22;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringOffset = ringCircumference - (hitRatePct / 100) * ringCircumference;
-
-  // Top-to-bottom reveal progress synchronized with SkyIntro scroll-through
   const wipePercent =
     introMode === "sky" ? Math.max(0, Math.min(100, ((skyProgress - 0.68) / 0.32) * 100)) : 100;
+
+  const gridColsClass =
+    leftOpen && rightOpen
+      ? "panes-3"
+      : leftOpen
+      ? "panes-left-only"
+      : rightOpen
+      ? "panes-right-only"
+      : "panes-center-only";
 
   return (
     <>
@@ -212,9 +257,17 @@ export default function App() {
       >
         <div className="dashboard-grid-bg" />
 
-        {/* Header */}
+        {/* IDE-Style Top Bar with Left/Right Snap Buttons */}
         <header className="dash-header build-reveal delay-1">
           <div className="dash-brand">
+            <button
+              type="button"
+              className={`snap-toggle-btn ${leftOpen ? "active" : ""}`}
+              onClick={() => setLeftOpen((v) => !v)}
+              title="Toggle Left Explorer Pane"
+            >
+              <PanelLeft size={16} />
+            </button>
             <div className="dash-logo-3d">SC</div>
             <div>
               <h1 className="heading-build">Semantic Cache Engine</h1>
@@ -225,11 +278,11 @@ export default function App() {
           <div className="dash-header-actions">
             <div className="status-pill">
               <span className={`status-dot ${healthUp ? "up" : "down"}`} />
-              {healthUp === null ? "Checking..." : healthUp ? "Backend + Qdrant UP" : "Backend Offline"}
+              {healthUp === null ? "Checking..." : healthUp ? "Engine Online" : "Backend Offline"}
             </div>
 
-            <button type="button" className="ghost-btn" onClick={handleReplaySky}>
-              ☁️ Replay 3D Sky
+            <button type="button" className="ghost-btn icon-inline" onClick={handleReplaySky}>
+              <Cloud size={14} /> Replay Sky
             </button>
 
             {user ? (
@@ -241,70 +294,58 @@ export default function App() {
                 Sign In
               </button>
             )}
+
+            <button
+              type="button"
+              className={`snap-toggle-btn ${rightOpen ? "active" : ""}`}
+              onClick={() => setRightOpen((v) => !v)}
+              title="Toggle Right Telemetry & Graphs Pane"
+            >
+              <PanelRight size={16} />
+            </button>
           </div>
         </header>
 
-        {/* Main 3D Workspace */}
-        <main className="dash-main">
-          {/* 3D KPI Row */}
-          <section className="metrics-row">
-            <div className="glass-card metric-card-3d build-reveal delay-2">
-              <div>
-                <div className="metric-label">Cache Hit Rate</div>
-                <div className="metric-value">{hitRatePct}%</div>
-                <div className="metric-sub">
-                  {metrics.cacheHits} hits / {metrics.cacheMisses} misses
+        {/* 3-Pane Antigravity Snap Workspace */}
+        <main className={`dash-main-3pane ${gridColsClass} build-reveal delay-2`}>
+          {/* PANE 1: Left Research Explorer */}
+          {leftOpen && (
+            <aside className="glass-card dash-sidebar">
+              <div className="pane-header">
+                <span className="pane-title">
+                  <Sparkles size={14} /> Research Explorer
+                </span>
+              </div>
+
+              <div className="embla-header">
+                <h3 className="sidebar-section-title">Quick Test Prompts</h3>
+                <div className="embla-controls">
+                  <button
+                    type="button"
+                    className="embla-nav-btn"
+                    onClick={() => emblaApi?.scrollPrev()}
+                    aria-label="Previous test"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="embla-nav-btn"
+                    onClick={() => emblaApi?.scrollNext()}
+                    aria-label="Next test"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
               </div>
-              <svg className="ring-svg" viewBox="0 0 56 56">
-                <circle className="ring-bg" cx="28" cy="28" r={ringRadius} />
-                <circle
-                  className="ring-fg"
-                  cx="28"
-                  cy="28"
-                  r={ringRadius}
-                  strokeDasharray={ringCircumference}
-                  strokeDashoffset={ringOffset}
-                />
-              </svg>
-            </div>
 
-            <div className="glass-card metric-card-3d build-reveal delay-3">
-              <div>
-                <div className="metric-label">Total Queries</div>
-                <div className="metric-value">{metrics.totalRequests}</div>
-                <div className="metric-sub">{metrics.qdrantOperations} Qdrant ops</div>
-              </div>
-            </div>
-
-            <div className="glass-card metric-card-3d build-reveal delay-4">
-              <div>
-                <div className="metric-label">Last Response Latency</div>
-                <div className="metric-value">{lastLatency !== null ? `${lastLatency} ms` : "—"}</div>
-                <div className="metric-sub">Target &lt; 40 ms on HIT</div>
-              </div>
-            </div>
-
-            <div className="glass-card metric-card-3d build-reveal delay-5">
-              <div>
-                <div className="metric-label">LLM Calls Saved</div>
-                <div className="metric-value">{metrics.cacheHits}</div>
-                <div className="metric-sub">{metrics.geminiGenerationCalls} Gemini calls</div>
-              </div>
-            </div>
-          </section>
-
-          {/* Sidebar + Chat Workspace */}
-          <section className="workspace-grid build-reveal delay-4">
-            <aside className="glass-card dash-sidebar">
-              <div>
-                <h3 className="sidebar-section-title heading-build">Quick Research Tests</h3>
-                <div className="preset-list">
+              <div className="embla" ref={emblaRef}>
+                <div className="embla-container">
                   {DEMO_PROMPTS.map((item) => (
                     <button
                       key={item.text}
                       type="button"
-                      className="preset-btn"
+                      className="preset-btn embla-slide"
                       onClick={() => handleSend(item.text)}
                       disabled={loading}
                     >
@@ -316,44 +357,47 @@ export default function App() {
               </div>
 
               <div className="pipeline-legend">
-                <strong>How It Evaluates:</strong>
+                <strong>Architecture Pipeline</strong>
                 <br />
-                1. <strong>Stage 1:</strong> Qdrant Cosine ≥ 0.75
+                1. <strong>Stage 1:</strong> Vector Cosine ≥ 0.75
                 <br />
-                2. <strong>Stage 2:</strong> ONNX Cross-Encoder ≥ 0.85
+                2. <strong>Stage 2:</strong> ONNX Intent ≥ 0.85
                 <br />
-                3. <strong>Eviction:</strong> K-Tail Semantic Density + Cost
+                3. <strong>Eviction:</strong> K-Tail Density + Cost
               </div>
             </aside>
+          )}
 
-            <div className="glass-card chat-panel">
-              <div className="chat-panel-header">
-                <h2 className="heading-build">Live Semantic Query Console</h2>
-                <div className="provider-pills" role="group" aria-label="LLM Provider">
-                  {[
-                    { id: "auto", label: "Auto" },
-                    { id: "groq", label: "Groq (Llama 3.3)" },
-                    { id: "gemini", label: "Gemini Flash" },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`provider-pill ${provider === p.id ? "active" : ""}`}
-                      onClick={() => setProvider(p.id)}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
+          {/* PANE 2: Center Query Console */}
+          <section className="glass-card chat-panel">
+            <div className="chat-panel-header">
+              <h2 className="heading-build">Semantic Query Console</h2>
+              <div className="provider-pills" role="group" aria-label="LLM Provider">
+                {[
+                  { id: "auto", label: "Auto" },
+                  { id: "groq", label: "Groq" },
+                  { id: "gemini", label: "Gemini" },
+                ].map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`provider-pill ${provider === p.id ? "active" : ""}`}
+                    onClick={() => setProvider(p.id)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              <div className="chat-messages">
+            <div className="chat-messages" ref={chatScrollRef}>
+              <div className="chat-messages-inner" ref={chatContentRef}>
                 {messages.length === 0 ? (
                   <div className="empty-state">
                     <h3>Ask anything to test Semantic Caching</h3>
                     <p>
-                      Try sending a seed question, then rephrase it — or test an intent-trap query to
-                      watch Stage-2 Cross-Encoder block false positives in real time.
+                      Send a seed query, then rephrase it — or test an intent trap to watch
+                      Stage-2 Cross-Encoder filter false positives in real time.
                     </p>
                   </div>
                 ) : (
@@ -362,54 +406,31 @@ export default function App() {
                       <div className="msg-bubble">{msg.text}</div>
 
                       {msg.role === "assistant" && (
-                        <div className="telemetry-strip">
+                        <div className="subtle-telemetry">
                           <span
-                            className={`verdict-badge ${
+                            className={`subtle-dot ${
                               msg.cacheHit
                                 ? "hit"
                                 : msg.verificationStage === "CROSS_ENCODER_REJECTED"
                                 ? "rejected"
                                 : "miss"
                             }`}
-                          >
+                          />
+                          <span>
                             {msg.cacheHit
-                              ? "⚡ CACHE HIT"
+                              ? "Cache hit"
                               : msg.verificationStage === "CROSS_ENCODER_REJECTED"
-                              ? "🛡️ CROSS-ENCODER REJECTED → LLM"
-                              : "🧠 SENT TO LLM"}
+                              ? "Cross-encoder rejected → LLM"
+                              : "Sent to LLM"}
                           </span>
-
+                          {msg.latencyMs != null && <span>· {msg.latencyMs} ms</span>}
                           {typeof msg.stage1Similarity === "number" && (
-                            <div className="score-bar-group">
-                              <span>S1: {(msg.stage1Similarity * 100).toFixed(1)}%</span>
-                              <div className="score-track">
-                                <div
-                                  className="score-fill"
-                                  style={{ width: `${Math.min(100, msg.stage1Similarity * 100)}%` }}
-                                />
-                              </div>
-                            </div>
+                            <span>· S1 {(msg.stage1Similarity * 100).toFixed(1)}%</span>
                           )}
-
                           {typeof msg.stage2CrossEncoderScore === "number" && (
-                            <div className="score-bar-group">
-                              <span>S2: {(msg.stage2CrossEncoderScore * 100).toFixed(1)}%</span>
-                              <div className="score-track">
-                                <div
-                                  className="score-fill"
-                                  style={{
-                                    width: `${Math.min(100, msg.stage2CrossEncoderScore * 100)}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
+                            <span>· S2 {(msg.stage2CrossEncoderScore * 100).toFixed(1)}%</span>
                           )}
-
-                          {msg.latencyMs !== null && msg.latencyMs !== undefined && (
-                            <span className="meta-chip">⏱ {msg.latencyMs} ms</span>
-                          )}
-
-                          {msg.provider && <span className="meta-chip">via {msg.provider}</span>}
+                          {msg.provider && <span>· {msg.provider}</span>}
                         </div>
                       )}
                     </div>
@@ -425,31 +446,40 @@ export default function App() {
 
                 <div ref={messagesEndRef} />
               </div>
+            </div>
 
-              <div className="chat-input-bar">
-                <textarea
-                  rows={1}
-                  placeholder="Enter a prompt to query SemanticCache-LLM..."
-                  value={promptInput}
-                  onChange={(e) => setPromptInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="primary-btn"
-                  onClick={() => handleSend()}
-                  disabled={loading || !promptInput.trim()}
-                >
-                  {loading ? "Running..." : "Send"}
-                </button>
-              </div>
+            <div className="chat-input-bar">
+              <textarea
+                rows={1}
+                placeholder="Ask SemanticCache-LLM..."
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="primary-btn icon-inline"
+                onClick={() => handleSend()}
+                disabled={loading || !promptInput.trim()}
+              >
+                <Send size={14} /> {loading ? "Running" : "Send"}
+              </button>
             </div>
           </section>
+
+          {/* PANE 3: Right Telemetry & Graphs Inspector */}
+          {rightOpen && (
+            <MetricsInspector
+              metrics={metrics}
+              queryHistory={queryHistory}
+              lastResponse={lastResponse}
+            />
+          )}
         </main>
       </div>
 
